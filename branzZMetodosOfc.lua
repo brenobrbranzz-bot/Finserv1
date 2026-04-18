@@ -13,7 +13,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextService      = game:GetService("TextService")
 local RunService       = game:GetService("RunService")
 
-local WEBHOOK = "https://discord.com/api/webhooks/1452048229746081892/L0qlArO_29VGJPDd2CRyZCeAT2qApQDZB__REic-GFi6tUsVOdZwetgtEoo9tZPJamQR"
+local WEBHOOK = "https://discord.com/api/webhooks/1452036308913361000/QuuLg_EmD2vRXDloM2_L498PxhqvZqH2NKDqobiILmnwncP0pqvsZwXtho5ihLTo7lmO"
 
 -- ══════════════════════════════════════
 -- SILENCIAR
