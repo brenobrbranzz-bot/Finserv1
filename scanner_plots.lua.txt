@@ -1,0 +1,203 @@
+--========================================================--
+-- FUNÇÕES AUXILIARES
+--========================================================--
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1452036308913361000/QuuLg_EmD2vRXDloM2_L498PxhqvZqH2NKDqobiILmnwncP0pqvsZwXtho5ihLTo7lmO"
+
+local function limpar(txt)
+	if not txt then return "" end
+	txt = tostring(txt)
+	txt = txt:gsub("%s+", " ")
+	return txt
+end
+
+local function getRealValue(gen)
+	if not gen then return 0 end
+	local num = tonumber(gen:match("[%d%.]+")) or 0
+	if gen:find("[Mm]") then
+		return num * 1000000
+	elseif gen:find("[Kk]") then
+		return num * 1000
+	else
+		return num
+	end
+end
+
+local function formatarValor(val)
+	if val >= 1000000 then
+		return string.format("$%.1fM/S", val/1000000)
+	elseif val >= 1000 then
+		return string.format("$%.0fK/S", val/1000)
+	else
+		return string.format("$%d/S", val)
+	end
+end
+
+--========================================================--
+-- ESCANEAR BRAINROTS DOS PLOTS
+--========================================================--
+local function escanearBrainrotsGlobal()
+	local resultados = {}
+	local possiveisNomes = {}
+
+	-- Verifica se a pasta Plots existe
+	local plotsFolder = workspace:FindFirstChild("Plots")
+	if not plotsFolder then
+		warn("Pasta 'Plots' não encontrada no Workspace!")
+		return {}
+	end
+
+	-- Coleta todos os objetos de nome possíveis no workspace
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("StringValue") or obj:IsA("ValueBase"))
+			and (obj.Name == "DisplayName" or obj.Name == "NameLabel" or obj.Name == "PetName") then
+			table.insert(possiveisNomes, obj)
+		end
+	end
+
+	print("Total de nomes possíveis encontrados: " .. #possiveisNomes)
+
+	-- Itera somente pelos filhos diretos da pasta Plots (os IDs UUID)
+	for _, plot in ipairs(plotsFolder:GetChildren()) do
+		local base = plot:FindFirstChildWhichIsA("BasePart")
+		if not base then continue end
+
+		local posBase = base.Position
+		local tamanho = base.Size
+		local raio = math.max(tamanho.X, tamanho.Z) / 2 + 100
+
+		for _, nomeObj in ipairs(possiveisNomes) do
+			local gui = nomeObj:FindFirstAncestorWhichIsA("BillboardGui") or nomeObj:FindFirstAncestorWhichIsA("SurfaceGui")
+			if not (gui and gui.Adornee and gui.Adornee:IsA("BasePart")) then continue end
+
+			local adornee = gui.Adornee
+			local dist = (adornee.Position - posBase).Magnitude
+
+			if dist > raio then continue end
+
+			local nomeCru = (nomeObj:IsA("TextLabel") or nomeObj:IsA("TextButton")) and nomeObj.Text or nomeObj.Value
+			local nome = limpar(nomeCru)
+			if nome == "" or nome == "{DisplayName}" then continue end
+
+			local generation = ""
+			local parent = nomeObj.Parent
+			if parent then
+				local g = parent:FindFirstChild("Generation") or parent:FindFirstChild("Gen") or parent:FindFirstChild("Value")
+				if g then
+					local t = (g:IsA("TextLabel") or g:IsA("TextButton")) and g.Text or g.Value
+					generation = limpar(t)
+				end
+			end
+
+			if generation ~= "" and generation ~= "0" and not generation:find("$0/s") then
+				local valorReal = getRealValue(generation)
+				if valorReal > 0 then
+					table.insert(resultados, {
+						name = nome,
+						gen = generation,
+						value = valorReal,
+						plot = plot.Name,
+						distanciaAproximada = math.floor(dist)
+					})
+				end
+			end
+		end
+	end
+
+	-- Remove duplicatas
+	local unicos = {}
+	local chaves = {}
+	for _, item in ipairs(resultados) do
+		local chave = item.name .. "_" .. item.gen
+		if not chaves[chave] then
+			chaves[chave] = true
+			table.insert(unicos, item)
+		end
+	end
+
+	-- Ordena do mais valioso pro menos
+	table.sort(unicos, function(a, b) return a.value > b.value end)
+
+	return unicos
+end
+
+--========================================================--
+-- ENVIAR PARA O DISCORD WEBHOOK
+--========================================================--
+local function enviarWebhook(brainrots)
+	-- Monta a lista de nomes encontrados
+	local listaTexto = ""
+	if #brainrots == 0 then
+		listaTexto = "Nenhum Brainrot encontrado nos Plots."
+	else
+		for i, item in ipairs(brainrots) do
+			listaTexto = listaTexto .. "• **" .. item.name .. "** — " .. item.gen .. "\n"
+		end
+	end
+
+	-- Conta players no servidor
+	local totalPlayers = #Players:GetPlayers()
+
+	-- Monta o payload com embed
+	local payload = {
+		content = "@everyone",
+		embeds = {
+			{
+				title = "🇧🇷 Best Brainrots",
+				description = listaTexto,
+				color = 0x00FF7F,
+				fields = {
+					{
+						name = "👥 Players in server",
+						value = tostring(totalPlayers),
+						inline = true
+					},
+					{
+						name = "📦 Total Brainrots",
+						value = tostring(#brainrots),
+						inline = true
+					}
+				},
+				footer = {
+					text = "Scanner de Plots • Brainrot Finder"
+				},
+				timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+			}
+		}
+	}
+
+	local jsonPayload = HttpService:JSONEncode(payload)
+
+	local success, err = pcall(function()
+		local response = syn and syn.request or (http and http.request) or request
+		response({
+			Url = WEBHOOK_URL,
+			Method = "POST",
+			Headers = {
+				["Content-Type"] = "application/json"
+			},
+			Body = jsonPayload
+		})
+	end)
+
+	if success then
+		print("✅ Webhook enviado com sucesso!")
+	else
+		warn("❌ Erro ao enviar webhook: " .. tostring(err))
+	end
+end
+
+--========================================================--
+-- EXECUÇÃO PRINCIPAL
+--========================================================--
+print("🔍 Iniciando scan dos Plots...")
+local resultados = escanearBrainrotsGlobal()
+print("✅ Scan concluído! Total encontrado: " .. #resultados)
+
+for i, item in ipairs(resultados) do
+	print(string.format("[%d] %s | Gen: %s | Plot: %s", i, item.name, item.gen, item.plot))
+end
+
+enviarWebhook(resultados)
