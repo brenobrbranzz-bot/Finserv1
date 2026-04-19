@@ -844,7 +844,7 @@ end
 -- ============================================================
 -- AUTO RIGHT / AUTO LEFT — método CFrame direto
 -- ============================================================
-local AUTO_STEP = 1.15  -- velocidade do passo (equivalente ao original ~59 u/s no RenderStepped)
+local AUTO_STEP = 1.20  -- velocidade do passo (equivalente ao original ~59 u/s no RenderStepped)
 
 local autoRightConn = nil
 local autoLeftConn  = nil
