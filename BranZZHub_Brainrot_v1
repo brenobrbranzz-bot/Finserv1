@@ -1,0 +1,1522 @@
+-- ============================================================
+--   BranZZ Hub Brainrot v2.0
+--   by BranZZ MetoDos
+-- ============================================================
+
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService     = game:GetService("TweenService")
+local StarterGui       = game:GetService("StarterGui")
+local HttpService      = game:GetService("HttpService")
+local TeleportService  = game:GetService("TeleportService")
+local ReplicatedStorage= game:GetService("ReplicatedStorage")
+local LP               = Players.LocalPlayer
+local PlayerGui        = LP:WaitForChild("PlayerGui")
+
+-- Limpa antiga
+pcall(function()
+    local old = PlayerGui:FindFirstChild("BranZZ_BrainrotHubV2")
+    if old then old:Destroy() end
+end)
+-- Remove plataforma velha
+pcall(function()
+    for _, o in ipairs(workspace:GetChildren()) do
+        if o.Name == "BHB_Platform" or o.Name == "BHB_ESP" or o.Name == "BHB_Mark" or o.Name == "BHB_Line" then
+            o:Destroy()
+        end
+    end
+end)
+
+-- ============================================================
+-- COMPAT EXECUTORES
+-- ============================================================
+if not getgenv then getgenv = function() return _G end end
+local function safeWrite(name, data)
+    pcall(function() if writefile then writefile(name, data) end end)
+end
+local function safeRead(name)
+    local ok, r = pcall(function()
+        if isfile and readfile and isfile(name) then return readfile(name) end
+    end)
+    return ok and r or nil
+end
+
+local SAVE_FILE = "branzzBrainrotV2.json"
+
+-- ============================================================
+-- CORES (do Finder v2)
+-- ============================================================
+local C = {
+    bg       = Color3.fromRGB(6, 5, 12),
+    s1       = Color3.fromRGB(13, 11, 22),
+    s2       = Color3.fromRGB(18, 16, 30),
+    s3       = Color3.fromRGB(25, 22, 40),
+    s4       = Color3.fromRGB(35, 30, 55),
+    bd       = Color3.fromRGB(50, 40, 80),
+    tx       = Color3.fromRGB(220, 215, 240),
+    sub      = Color3.fromRGB(120, 110, 155),
+    purple   = Color3.fromRGB(140, 60, 220),
+    purpleL  = Color3.fromRGB(190, 110, 255),
+    purpleDim= Color3.fromRGB(90, 40, 150),
+    green    = Color3.fromRGB(40, 215, 90),
+    red      = Color3.fromRGB(255, 60, 50),
+    yellow   = Color3.fromRGB(255, 210, 0),
+    cyan     = Color3.fromRGB(0, 205, 235),
+    orange   = Color3.fromRGB(255, 148, 0),
+    gold     = Color3.fromRGB(255, 200, 50),
+    diamond  = Color3.fromRGB(100, 200, 255),
+    bigbang  = Color3.fromRGB(255, 100, 220),
+}
+local RARITY_COLOR = {
+    BigBang = Color3.fromRGB(255, 100, 220),
+    Diamond = Color3.fromRGB(100, 200, 255),
+    Gold    = Color3.fromRGB(255, 200, 50),
+    Normal  = Color3.fromRGB(120, 110, 155),
+}
+local RARITY_ORDER = {"BigBang","Diamond","Gold","Normal"}
+
+-- ============================================================
+-- ESTADO
+-- ============================================================
+local S = {
+    espOn        = false,
+    antiAdminOn  = false,
+    platformOn   = false,
+    jumpGravOn   = false,
+    tpFlashOn    = false,
+    tpTweenOn    = false,
+    jumpPower    = 35,
+    tweenSpeed   = 30,
+    platSpeed    = 5,
+    currentTab   = "Main",
+    platKey      = "P", -- keybind da plataforma
+}
+
+-- ============================================================
+-- SAVE/LOAD
+-- ============================================================
+local function loadState()
+    local raw = safeRead(SAVE_FILE)
+    if not raw then return end
+    local ok, d = pcall(function() return HttpService:JSONDecode(raw) end)
+    if ok and d then
+        for k, v in pairs(d) do
+            if S[k] ~= nil and type(v) == type(S[k]) then S[k] = v end
+        end
+    end
+end
+local function saveState()
+    local d = {}
+    for k, v in pairs(S) do if type(v) ~= "table" then d[k] = v end end
+    safeWrite(SAVE_FILE, HttpService:JSONEncode(d))
+end
+loadState()
+task.spawn(function() while task.wait(10) do saveState() end end)
+
+-- ============================================================
+-- NOTIFY
+-- ============================================================
+local function notify(title, text, dur)
+    pcall(function()
+        StarterGui:SetCore("SendNotification",{Title=title,Text=text,Duration=dur or 4})
+    end)
+end
+
+-- ============================================================
+-- UI HELPERS
+-- ============================================================
+local function corner(p, r)
+    local c = Instance.new("UICorner", p)
+    c.CornerRadius = UDim.new(0, r or 10)
+    return c
+end
+local function stroke(p, col, t)
+    local s = Instance.new("UIStroke", p)
+    s.Color = col or C.bd
+    s.Thickness = t or 1
+    return s
+end
+local function animHue(obj, prop, spd)
+    task.spawn(function()
+        local hue = math.random()
+        while obj and obj.Parent do
+            hue = (hue + (spd or 0.006)) % 1
+            obj[prop] = Color3.fromHSV(hue, 0.9, 1)
+            task.wait(0.05)
+        end
+    end)
+end
+
+-- ============================================================
+-- BRAINROT LIST + RARIDADE (do Finder v2)
+-- ============================================================
+local BRAZILROT_LIST = {
+    "Burguerino Kingino","Coelhone Nesquikne","Cuscuzini Manteguini",
+    "Dollyretti Guaranazzi","Fulecazzo Lutariny","Los Docitonitos",
+    "Malandrini Dribladorini","Maquiteira serralheira","Orelhone Telefony",
+    "Paçoquita","Zé Drippolini Vacinnaro","Urubini Flamenguini",
+    "Toddynelli Turbochoco","Pudino Condensadoni","Goozini Cafezini",
+    "Patino Aurudo","Não Chorax","Chineleira Pregueira",
+    "Negresconi Bombadony","Jakarate","Caramelo Filtrello",
+}
+
+-- Brainrots perigosos: linha VERMELHA
+local DANGER = {
+    ["urubini flamenguini"] = true,
+    ["não chorax"]          = true,
+}
+
+local function isBrazilrotName(text)
+    local tl = text:lower()
+    for _, name in ipairs(BRAZILROT_LIST) do
+        if tl:find(name:lower(), 1, true) then return name end
+    end
+    return nil
+end
+
+local function getBrainrotRarity(brainrotName)
+    local RS = ReplicatedStorage
+    for _, rarityName in ipairs(RARITY_ORDER) do
+        local folder
+        local BBase = RS:FindFirstChild("Brainrots")
+        if BBase then folder = BBase:FindFirstChild(rarityName) end
+        if not folder then folder = RS:FindFirstChild(rarityName) end
+        if folder then
+            for _, model in ipairs(folder:GetChildren()) do
+                if model.Name:lower():find(brainrotName:lower(), 1, true) or
+                   brainrotName:lower():find(model.Name:lower(), 1, true) then
+                    return rarityName
+                end
+            end
+        end
+    end
+    local BV = workspace:FindFirstChild("BrainrotsVisual")
+    if BV then
+        for _, rarityName in ipairs(RARITY_ORDER) do
+            local folder = BV:FindFirstChild(rarityName)
+            if folder then
+                for _, obj in ipairs(folder:GetDescendants()) do
+                    if obj:IsA("TextLabel") then
+                        local t = (obj.Text or obj.ContentText or ""):lower()
+                        if t:find(brainrotName:lower(), 1, true) then return rarityName end
+                    end
+                end
+            end
+        end
+    end
+    return "Normal"
+end
+
+-- ============================================================
+-- PARSE GEN (do Finder v2)
+-- ============================================================
+local function parseGen(text)
+    local b = text:match("([%d%.]+)%s*[Bb]")
+    if b then return tonumber(b)*1000000 end
+    local m = text:match("([%d%.]+)%s*[Mm]")
+    if m then return tonumber(m)*1000 end
+    local k = text:match("([%d%.]+)%s*[Kk]")
+    if k then return tonumber(k) end
+    local n = text:match("([%d%.]+)%s*/s")
+    if n then return tonumber(n)/1000 end
+    return 0
+end
+
+-- ============================================================
+-- SCAN BASES (do Finder v2, com basePos)
+-- ============================================================
+local function scanLocalServer()
+    local results = {}
+    local seen    = {}
+    local bases   = workspace:FindFirstChild("Bases")
+    if not bases then return results end
+
+    for _, base in ipairs(bases:GetChildren()) do
+        local ownerName = "?"
+        local ownerId   = 0
+
+        -- Detecta dono pela Placa
+        local placa = base:FindFirstChild("Placa", true)
+        if placa then
+            for _, desc in ipairs(placa:GetDescendants()) do
+                if desc:IsA("TextLabel") then
+                    local t = (desc.Text or ""):match("^%s*(.-)%s*$")
+                    if t and t ~= "" then
+                        for _, p in ipairs(Players:GetPlayers()) do
+                            if p.Name:lower() == t:lower() or
+                               (p.DisplayName or ""):lower() == t:lower() then
+                                ownerName = p.DisplayName ~= "" and p.DisplayName or p.Name
+                                ownerId   = p.UserId
+                                break
+                            end
+                        end
+                        if ownerId == 0 then ownerName = t end
+                    end
+                end
+            end
+        end
+        -- Tenta pegar pelo Owner
+        if ownerName == "?" then
+            local ow = base:FindFirstChild("Owner")
+            if ow and ow:IsA("StringValue") then ownerName = ow.Value end
+        end
+
+        -- Posição da base (para linha branca)
+        local basePart = base:FindFirstChildOfClass("BasePart")
+        if not basePart then
+            for _, d in ipairs(base:GetDescendants()) do
+                if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" then
+                    basePart = d; break
+                end
+            end
+        end
+        local basePos = basePart and basePart.Position or nil
+
+        -- Slots
+        local sf = base:FindFirstChild("Slots")
+        if not sf then
+            for _, d in ipairs(base:GetDescendants()) do
+                if d.Name == "Slots" then sf = d; break end
+            end
+        end
+        if not sf then continue end
+
+        for i = 1, 100 do
+            local sObj = sf:FindFirstChild("s"..i)
+            if not sObj then continue end
+            for _, desc in ipairs(sObj:GetDescendants()) do
+                if desc.Name == "BrainrotBillboard" then
+                    pcall(function()
+                        local labels = {}
+                        for _, o in ipairs(desc:GetDescendants()) do
+                            if o:IsA("TextLabel") then
+                                local t = (o.Text or o.ContentText or ""):match("^%s*(.-)%s*$")
+                                if t and t ~= "" and t ~= " " then
+                                    local dup = false
+                                    for _, ex in ipairs(labels) do if ex==t then dup=true break end end
+                                    if not dup then table.insert(labels, t) end
+                                end
+                            end
+                        end
+                        if #labels == 0 then return end
+                        local key = table.concat(labels, "|")
+                        if seen[key] then return end
+                        seen[key] = true
+
+                        local foundName, genText, genVal = nil, "", 0
+                        for _, lbl in ipairs(labels) do
+                            if not foundName then
+                                local n = isBrazilrotName(lbl)
+                                if n then foundName = n end
+                            end
+                            if lbl:match("[%d%.]+%s*[BbMmKk]") or lbl:match("[%d%.]+%s*/s") then
+                                local v = parseGen(lbl)
+                                if v > genVal then genVal = v; genText = lbl:match("^%s*(.-)%s*$") end
+                            end
+                        end
+                        if not foundName then return end
+
+                        local pos = Vector3.new(0,0,0)
+                        if desc.Parent and desc.Parent:IsA("BasePart") then
+                            pos = desc.Parent.Position
+                        elseif sObj:FindFirstChildOfClass("BasePart") then
+                            pos = sObj:FindFirstChildOfClass("BasePart").Position
+                        end
+
+                        local isDanger = DANGER[foundName:lower()] == true
+                        local rarity   = getBrainrotRarity(foundName)
+
+                        table.insert(results, {
+                            name      = foundName,
+                            genText   = genText,
+                            genVal    = genVal,
+                            pos       = pos,
+                            basePos   = basePos,
+                            ownerName = ownerName,
+                            ownerId   = ownerId,
+                            key       = key,
+                            rarity    = rarity,
+                            danger    = isDanger,
+                        })
+                    end)
+                end
+            end
+        end
+    end
+    table.sort(results, function(a,b) return a.genVal > b.genVal end)
+    return results
+end
+
+-- ============================================================
+-- ESP (billboard do Finder v2 + linhas)
+-- ============================================================
+local espAnchors  = {}
+local espLines    = {}
+local notifiedKeys= {}
+local lastESPSig  = ""
+
+local rankColors = {
+    Color3.fromRGB(255,200,0),
+    Color3.fromRGB(180,180,200),
+    Color3.fromRGB(200,120,40),
+}
+local function getRankColor(i) return rankColors[i] or C.cyan end
+
+local function clearESP()
+    for _, a in ipairs(espAnchors) do pcall(function() a:Destroy() end) end
+    espAnchors = {}
+    for _, l in ipairs(espLines) do pcall(function() l:Destroy() end) end
+    espLines = {}
+end
+
+-- Billboard IGUAL ao Finder v2
+local function makeESP(item, rank)
+    if not item.pos or item.pos == Vector3.new(0,0,0) then return end
+
+    local col = RARITY_COLOR[item.rarity] or getRankColor(rank)
+    if item.danger then col = C.red end
+
+    local anchor = Instance.new("Part")
+    anchor.Name        = "BHB_ESP"
+    anchor.Size        = Vector3.new(0.1,0.1,0.1)
+    anchor.Position    = item.pos
+    anchor.Anchored    = true
+    anchor.CanCollide  = false
+    anchor.Transparency= 1
+    anchor.Parent      = workspace
+    table.insert(espAnchors, anchor)
+
+    local bb = Instance.new("BillboardGui")
+    bb.Adornee      = anchor
+    bb.AlwaysOnTop  = true
+    bb.Size         = UDim2.new(0, 270, 0, 80)
+    bb.StudsOffset  = Vector3.new(0, 7, 0)
+    bb.MaxDistance  = 9999
+    bb.ResetOnSpawn = false
+    bb.Parent       = anchor
+
+    local bg = Instance.new("Frame", bb)
+    bg.Size                   = UDim2.new(1,0,1,0)
+    bg.BackgroundColor3       = C.bg
+    bg.BackgroundTransparency = 0.3
+    bg.BorderSizePixel        = 0
+    corner(bg, 8)
+    stroke(bg, col, 2)
+
+    -- Rarity badge
+    local rarBadge = Instance.new("Frame", bg)
+    rarBadge.Size                   = UDim2.new(0,70,0,18)
+    rarBadge.Position               = UDim2.new(1,-74,0,4)
+    rarBadge.BackgroundColor3       = col
+    rarBadge.BackgroundTransparency = 0.3
+    rarBadge.BorderSizePixel        = 0
+    corner(rarBadge, 6)
+    local rarLbl = Instance.new("TextLabel", rarBadge)
+    rarLbl.Size                   = UDim2.new(1,0,1,0)
+    rarLbl.BackgroundTransparency = 1
+    rarLbl.Text                   = item.danger and "⚠ PERIGO" or (item.rarity or "Normal")
+    rarLbl.TextColor3             = Color3.fromRGB(255,255,255)
+    rarLbl.Font                   = Enum.Font.GothamBold
+    rarLbl.TextSize               = 10
+    rarLbl.TextXAlignment         = Enum.TextXAlignment.Center
+
+    local nameL = Instance.new("TextLabel", bg)
+    nameL.Size                   = UDim2.new(1,-8,0,28)
+    nameL.Position               = UDim2.new(0,4,0,4)
+    nameL.BackgroundTransparency = 1
+    nameL.Text                   = (rank and "#"..rank.."  " or "")..item.name
+    nameL.TextColor3             = col
+    nameL.TextStrokeTransparency = 0
+    nameL.TextStrokeColor3       = Color3.fromRGB(0,0,0)
+    nameL.Font                   = Enum.Font.GothamBold
+    nameL.TextSize               = 14
+    nameL.TextXAlignment         = Enum.TextXAlignment.Center
+    nameL.TextWrapped            = true
+
+    local ownerL = Instance.new("TextLabel", bg)
+    ownerL.Size                   = UDim2.new(1,-8,0,18)
+    ownerL.Position               = UDim2.new(0,4,0,32)
+    ownerL.BackgroundTransparency = 1
+    ownerL.Text                   = "👤 "..item.ownerName
+    ownerL.TextColor3             = C.sub
+    ownerL.Font                   = Enum.Font.Gotham
+    ownerL.TextSize               = 11
+    ownerL.TextXAlignment         = Enum.TextXAlignment.Center
+
+    local genL = Instance.new("TextLabel", bg)
+    genL.Size                   = UDim2.new(1,-8,0,22)
+    genL.Position               = UDim2.new(0,4,0,52)
+    genL.BackgroundTransparency = 1
+    genL.Text                   = item.genText ~= "" and ("⚡ "..item.genText) or "⚡ ?"
+    genL.TextColor3             = C.yellow
+    genL.TextStrokeTransparency = 0
+    genL.TextStrokeColor3       = Color3.fromRGB(0,0,0)
+    genL.Font                   = Enum.Font.GothamBold
+    genL.TextSize               = 13
+    genL.TextXAlignment         = Enum.TextXAlignment.Center
+end
+
+-- Linha neon entre dois pontos
+local function makeLine(from, to, color)
+    if not from or not to then return end
+    local dist = (to - from).Magnitude
+    if dist < 1 then return end
+    local mid = (from + to) / 2
+    local p = Instance.new("Part")
+    p.Name        = "BHB_Line"
+    p.Size        = Vector3.new(0.12, 0.12, dist)
+    p.CFrame      = CFrame.lookAt(mid, to)
+    p.Anchored    = true
+    p.CanCollide  = false
+    p.CanTouch    = false
+    p.Material    = Enum.Material.Neon
+    p.Color       = color
+    p.Transparency= 0.15
+    p.Parent      = workspace
+    table.insert(espLines, p)
+end
+
+local function runESP()
+    local data = scanLocalServer()
+    local sig  = ""
+    for i, d in ipairs(data) do
+        sig = sig..(d.key or "").."|"
+        if i >= 10 then break end
+    end
+
+    -- Notificações
+    for _, item in ipairs(data) do
+        if not notifiedKeys[item.key] then
+            notifiedKeys[item.key] = true
+            if item.danger then
+                notify("⚠️ PERIGO!", item.name.." — "..item.ownerName, 7)
+            elseif item.rarity == "BigBang" or item.rarity == "Diamond" then
+                notify("🔥 Lendário!", item.name.." ["..item.rarity.."] — "..item.ownerName, 6)
+            end
+        end
+    end
+
+    if sig == lastESPSig then return data end
+    lastESPSig = sig
+    clearESP()
+
+    local c   = LP.Character
+    local hrp = c and c:FindFirstChild("HumanoidRootPart")
+    local from = hrp and hrp.Position or nil
+
+    for i, item in ipairs(data) do
+        makeESP(item, i)
+        if from then
+            -- Linha até o brainrot
+            if item.pos and item.pos ~= Vector3.new(0,0,0) then
+                local lineColor = item.danger and C.red or C.yellow
+                -- Lendários: laranja/rosa
+                if not item.danger then
+                    if item.rarity == "BigBang" then lineColor = C.bigbang
+                    elseif item.rarity == "Diamond" then lineColor = C.diamond
+                    elseif item.rarity == "Gold" then lineColor = C.gold end
+                end
+                makeLine(from, item.pos, lineColor)
+            end
+            -- Linha branca até a base
+            if item.basePos and item.basePos ~= Vector3.new(0,0,0) then
+                makeLine(from, item.basePos, Color3.fromRGB(255,255,255))
+            end
+        end
+    end
+    return data
+end
+
+-- ============================================================
+-- MARK POSITION
+-- ============================================================
+local markedPos   = nil
+local markAnchor  = nil
+
+local function clearMark()
+    if markAnchor then pcall(function() markAnchor:Destroy() end); markAnchor = nil end
+    markedPos = nil
+end
+
+local function markPosition()
+    local c = LP.Character
+    if not c then return end
+    local hrp = c:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    clearMark()
+    markedPos = hrp.Position
+
+    local anchor = Instance.new("Part")
+    anchor.Name        = "BHB_Mark"
+    anchor.Size        = Vector3.new(0.1,0.1,0.1)
+    anchor.Position    = markedPos
+    anchor.Anchored    = true
+    anchor.CanCollide  = false
+    anchor.Transparency= 1
+    anchor.Parent      = workspace
+    markAnchor = anchor
+
+    local bb = Instance.new("BillboardGui")
+    bb.Adornee      = anchor
+    bb.AlwaysOnTop  = true
+    bb.Size         = UDim2.new(0,200,0,65)
+    bb.StudsOffset  = Vector3.new(0,8,0)
+    bb.MaxDistance  = 9999
+    bb.ResetOnSpawn = false
+    bb.Parent       = anchor
+
+    local bg = Instance.new("Frame", bb)
+    bg.Size                   = UDim2.new(1,0,1,0)
+    bg.BackgroundColor3       = Color3.fromRGB(5,5,10)
+    bg.BackgroundTransparency = 0.2
+    bg.BorderSizePixel        = 0
+    corner(bg, 8)
+    local bStr = stroke(bg, C.cyan, 2.5)
+    animHue(bStr, "Color", 0.012)
+
+    local icon = Instance.new("TextLabel", bg)
+    icon.Size                   = UDim2.new(1,0,0.5,0)
+    icon.BackgroundTransparency = 1
+    icon.Text                   = "📍 POSIÇÃO MARCADA"
+    icon.TextColor3             = C.cyan
+    icon.TextStrokeTransparency = 0
+    icon.TextStrokeColor3       = Color3.fromRGB(0,0,0)
+    icon.Font                   = Enum.Font.GothamBold
+    icon.TextSize               = 13
+    icon.TextXAlignment         = Enum.TextXAlignment.Center
+
+    local posLbl = Instance.new("TextLabel", bg)
+    posLbl.Size                   = UDim2.new(1,0,0.45,0)
+    posLbl.Position               = UDim2.new(0,0,0.55,0)
+    posLbl.BackgroundTransparency = 1
+    posLbl.Text                   = string.format("X%.0f Y%.0f Z%.0f", markedPos.X, markedPos.Y, markedPos.Z)
+    posLbl.TextColor3             = Color3.fromRGB(180,220,255)
+    posLbl.Font                   = Enum.Font.Gotham
+    posLbl.TextSize               = 11
+    posLbl.TextXAlignment         = Enum.TextXAlignment.Center
+
+    -- Coluna de luz
+    local beam = Instance.new("Part")
+    beam.Name        = "BHB_MarkBeam"
+    beam.Size        = Vector3.new(0.4,80,0.4)
+    beam.CFrame      = CFrame.new(markedPos + Vector3.new(0,40,0))
+    beam.Anchored    = true
+    beam.CanCollide  = false
+    beam.Material    = Enum.Material.Neon
+    beam.Color       = C.cyan
+    beam.Transparency= 0.3
+    beam.Parent      = anchor
+    animHue(beam, "Color", 0.01)
+
+    notify("📍 Mark", string.format("Marcado: %.0f, %.0f, %.0f", markedPos.X, markedPos.Y, markedPos.Z), 4)
+end
+
+-- ============================================================
+-- TP FLASH V2
+-- ============================================================
+local tpFlashConn   = nil
+local byteKillerDone= false
+local lastPos_flash = nil
+
+local function killByteGuard()
+    if byteKillerDone then return end
+    byteKillerDone = true
+    pcall(function()
+        local ps = LP:FindFirstChild("PlayerScripts")
+        if not ps then return end
+        for _, name in ipairs({"ByteGuardClient","ClientRec","DiscoEvent"}) do
+            local obj = ps:FindFirstChild(name)
+            if obj then obj:Destroy() end
+        end
+        for _, child in ipairs(ps:GetChildren()) do
+            local low = child.Name:lower()
+            if low:find("guard") or low:find("byte") or low:find("anticheat") then
+                child:Destroy()
+            end
+        end
+    end)
+end
+
+local function findCaixote()
+    local bases = workspace:FindFirstChild("Bases")
+    if not bases then return nil end
+    local c = LP.Character
+    if not c then return nil end
+    local hrp = c:FindFirstChild("HumanoidRootPart")
+    if not hrp then return nil end
+    local bestDist, bestPart = math.huge, nil
+    for _, base in ipairs(bases:GetChildren()) do
+        -- Procura ProximityPrompt em toda a base (dentro de Decorações ou não)
+        for _, obj in ipairs(base:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") then
+                local pp = obj.Parent
+                if pp and pp:IsA("BasePart") then
+                    local dist = (pp.Position - hrp.Position).Magnitude
+                    if dist < bestDist then bestDist = dist; bestPart = pp end
+                end
+            end
+        end
+    end
+    return bestPart
+end
+
+local function startTpFlash()
+    if tpFlashConn then return end
+    killByteGuard()
+    tpFlashConn = RunService.Heartbeat:Connect(function()
+        if not S.tpFlashOn then return end
+        local c = LP.Character
+        if not c then return end
+        local hrp = c:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        -- Detecta TP forçada pelo ByteGuard (delta > 20 studs num frame)
+        if lastPos_flash then
+            local delta = (hrp.Position - lastPos_flash).Magnitude
+            if delta > 20 then
+                local caixote = findCaixote()
+                if caixote then
+                    hrp.CFrame = CFrame.new(caixote.Position + Vector3.new(0,3,0))
+                    notify("TP Flash","ByteGuard interceptado! Tpando...",2)
+                end
+            end
+        end
+        -- Mini TPs contínuas pro caixote
+        local caixote = findCaixote()
+        if caixote then
+            local dist = (hrp.Position - caixote.Position).Magnitude
+            if dist > 4 then
+                hrp.CFrame = CFrame.new(hrp.Position:Lerp(caixote.Position + Vector3.new(0,2,0), 0.35))
+            end
+        end
+        lastPos_flash = hrp.Position
+    end)
+end
+local function stopTpFlash()
+    if tpFlashConn then tpFlashConn:Disconnect(); tpFlashConn = nil end
+    lastPos_flash = nil
+end
+
+-- ============================================================
+-- TP TWEEN (zigzag até posição marcada)
+-- ============================================================
+local tweenRunning = false
+local tweenConn    = nil
+
+local function startTpTween(targetPos)
+    if not targetPos then notify("TP Tween","Marque uma posição primeiro!",3); return end
+    if tweenRunning then return end
+    local c = LP.Character
+    if not c then return end
+    local hrp = c:FindFirstChild("HumanoidRootPart")
+    local hum = c:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then return end
+    tweenRunning = true
+    hum.PlatformStand = true
+    local t = 0
+    tweenConn = RunService.Heartbeat:Connect(function(dt)
+        if not tweenRunning then return end
+        local c2  = LP.Character
+        if not c2 then tweenRunning = false return end
+        local h2  = c2:FindFirstChild("HumanoidRootPart")
+        local hm2 = c2:FindFirstChildOfClass("Humanoid")
+        if not h2 or not hm2 then tweenRunning = false return end
+        t = t + dt
+        local horiz = Vector3.new(targetPos.X - h2.Position.X, 0, targetPos.Z - h2.Position.Z)
+        if horiz.Magnitude < 2.5 then
+            h2.CFrame = CFrame.new(targetPos)
+            hm2.PlatformStand = false
+            tweenRunning = false
+            tweenConn:Disconnect(); tweenConn = nil
+            notify("TP Tween","Chegou!",2)
+            return
+        end
+        local vertOffset = math.sin(t * math.pi / 4) * 6
+        local dir = horiz.Unit
+        local spd = S.tweenSpeed
+        local np = h2.Position + dir * spd * dt
+        np = Vector3.new(np.X, h2.Position.Y + vertOffset * dt * 2.5, np.Z)
+        h2.CFrame = CFrame.new(np)
+    end)
+end
+local function stopTpTween()
+    tweenRunning = false
+    if tweenConn then tweenConn:Disconnect(); tweenConn = nil end
+    local c = LP.Character
+    if c then
+        local hum = c:FindFirstChildOfClass("Humanoid")
+        if hum then hum.PlatformStand = false end
+    end
+end
+
+-- ============================================================
+-- SECURE PLATFORM  ← REESCRITA TOTAL
+-- ============================================================
+local platPart    = nil   -- a Part no workspace
+local platConn    = nil   -- RunService connection
+local platPaused  = false -- pausado?
+local platTargetY = nil   -- Y alvo atual (nil = parado)
+local platSpeedDir= 0     -- +1 subindo, -1 descendo, 0 parado
+
+local function destroyPlatform()
+    -- Para tudo
+    if platConn then platConn:Disconnect(); platConn = nil end
+    platPaused  = false
+    platTargetY = nil
+    platSpeedDir= 0
+    -- Remove parts no workspace
+    pcall(function()
+        for _, o in ipairs(workspace:GetChildren()) do
+            if o.Name == "BHB_Platform" then o:Destroy() end
+        end
+    end)
+    if platPart then pcall(function() platPart:Destroy() end); platPart = nil end
+end
+
+local function buildPlatform()
+    destroyPlatform()
+    -- Começa ABAIXO do mapa
+    local startY = -3000
+    local p = Instance.new("Part")
+    p.Name        = "BHB_Platform"
+    p.Anchored    = true
+    p.CanCollide  = true
+    p.CanTouch    = true
+    p.Size        = Vector3.new(8192, 8, 8192)   -- COBRE TUDO
+    p.Material    = Enum.Material.Neon
+    p.Color       = Color3.fromRGB(30, 0, 80)
+    p.Transparency= 0.4
+    p.CFrame      = CFrame.new(0, startY, 0)
+    p.Parent      = workspace
+    platPart      = p
+    -- Borda RGB
+    pcall(function()
+        local sel = Instance.new("SelectionBox", p)
+        sel.Adornee             = p
+        sel.LineThickness        = 0.1
+        sel.SurfaceTransparency = 1
+        task.spawn(function()
+            local hue = 0
+            while sel and sel.Parent do
+                hue = (hue+0.008)%1
+                sel.Color3 = Color3.fromHSV(hue,1,1)
+                task.wait(0.05)
+            end
+        end)
+    end)
+    return p
+end
+
+local function startPlatformLoop()
+    if platConn then platConn:Disconnect(); platConn = nil end
+    platConn = RunService.Heartbeat:Connect(function(dt)
+        if not S.platformOn then return end
+        if not platPart or not platPart.Parent then return end
+        if platPaused then return end
+        if platSpeedDir == 0 then return end  -- parado: não move
+
+        local curY   = platPart.CFrame.Position.Y
+        local spd    = S.platSpeed * 60 * dt * platSpeedDir
+        local newY   = curY + spd
+
+        platPart.CFrame = CFrame.new(0, newY, 0)
+
+        -- Leva o player junto se estiver em cima
+        local c2 = LP.Character
+        if c2 then
+            local hrp2 = c2:FindFirstChild("HumanoidRootPart")
+            if hrp2 then
+                local platTop = newY + 4   -- topo da plat (altura/2)
+                local py      = hrp2.Position.Y
+                -- player está "em cima" se está dentro de ~5 studs do topo
+                if py >= platTop - 3 and py <= platTop + 6 then
+                    hrp2.CFrame = CFrame.new(
+                        hrp2.Position.X,
+                        platTop + 4,
+                        hrp2.Position.Z
+                    )
+                end
+            end
+        end
+    end)
+end
+
+-- ============================================================
+-- JUMP POWER + LOW GRAVITY
+-- ============================================================
+local gravAttach = nil
+local gravForce  = nil
+local jumpConn   = nil
+
+local function clearOldGrav()
+    pcall(function()
+        local c = LP.Character
+        if not c then return end
+        local hrp = c:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        for _, d in ipairs(hrp:GetChildren()) do
+            if (d:IsA("VectorForce") or d:IsA("BodyForce") or d:IsA("Attachment"))
+               and d.Name:find("BHB") then
+                d:Destroy()
+            end
+        end
+    end)
+end
+
+local function startJumpGrav()
+    clearOldGrav()
+    local c = LP.Character
+    if not c then return end
+    local hrp = c:FindFirstChild("HumanoidRootPart")
+    local hum = c:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum then return end
+    hum.JumpPower = S.jumpPower
+
+    gravAttach = Instance.new("Attachment")
+    gravAttach.Name   = "BHB_GravAttach"
+    gravAttach.Parent = hrp
+
+    gravForce = Instance.new("VectorForce")
+    gravForce.Name                = "BHB_GravForce"
+    gravForce.Attachment0         = gravAttach
+    gravForce.ApplyAtCenterOfMass = true
+    gravForce.RelativeTo          = Enum.ActuatorRelativeTo.World
+    gravForce.Parent              = hrp
+
+    jumpConn = RunService.Heartbeat:Connect(function()
+        if not S.jumpGravOn then return end
+        pcall(function()
+            local c2 = LP.Character
+            if not c2 then return end
+            local hum2 = c2:FindFirstChildOfClass("Humanoid")
+            if hum2 then hum2.JumpPower = S.jumpPower end
+            local mass = 0
+            for _, p in ipairs(c2:GetDescendants()) do if p:IsA("BasePart") then mass+=p:GetMass() end end
+            gravForce.Force = Vector3.new(0, mass * 196.2 * 0.52, 0)
+        end)
+    end)
+end
+local function stopJumpGrav()
+    if jumpConn then jumpConn:Disconnect(); jumpConn = nil end
+    clearOldGrav(); gravAttach=nil; gravForce=nil
+    local c = LP.Character
+    if c then
+        local hum = c:FindFirstChildOfClass("Humanoid")
+        if hum then hum.JumpPower = 50 end
+    end
+end
+
+-- ============================================================
+-- ANTI ADMIN
+-- ============================================================
+local antiAdminConn = nil
+local function startAntiAdmin()
+    if antiAdminConn then return end
+    antiAdminConn = RunService.Heartbeat:Connect(function()
+        if not S.antiAdminOn then return end
+        pcall(function()
+            local gOwner = game.CreatorId
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p.UserId == gOwner then
+                    notify("Anti Admin","⚠️ Dono detectado! Saindo...",4)
+                    task.wait(0.8)
+                    TeleportService:Teleport(game.PlaceId, LP)
+                end
+            end
+        end)
+    end)
+end
+local function stopAntiAdmin()
+    if antiAdminConn then antiAdminConn:Disconnect(); antiAdminConn = nil end
+end
+
+-- ============================================================
+-- RESPAWN
+-- ============================================================
+LP.CharacterAdded:Connect(function()
+    task.wait(1.2)
+    if S.jumpGravOn  then stopJumpGrav();  task.wait(0.1); startJumpGrav()  end
+    if S.tpFlashOn   then stopTpFlash();   task.wait(0.1); startTpFlash()   end
+    if S.platformOn  then startPlatformLoop() end
+end)
+
+-- ============================================================
+-- SCREEN GUI
+-- ============================================================
+local sg = Instance.new("ScreenGui")
+sg.Name           = "BranZZ_BrainrotHubV2"
+sg.ResetOnSpawn   = false
+sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+sg.IgnoreGuiInset = true
+sg.Parent         = PlayerGui
+
+-- ============================================================
+-- BANNER TOPO
+-- ============================================================
+local banner = Instance.new("Frame", sg)
+banner.Size             = UDim2.new(0,520,0,28)
+banner.Position         = UDim2.new(0.5,-260,0,6)
+banner.BackgroundColor3 = Color3.fromRGB(6,5,12)
+banner.BorderSizePixel  = 0
+corner(banner,10)
+local bStr2 = stroke(banner, C.purple, 2)
+animHue(bStr2,"Color",0.005)
+local banLbl = Instance.new("TextButton", banner)
+banLbl.BackgroundTransparency = 1
+banLbl.Size                   = UDim2.new(1,0,1,0)
+banLbl.Font                   = Enum.Font.GothamBold
+banLbl.Text                   = "💜 BranZZ Hub Brainrot v2.0  ||  gratis em  ||  discord.gg/69xw56bg2J"
+banLbl.TextSize               = 11
+banLbl.AutoButtonColor        = false
+task.spawn(function()
+    local t=0
+    while banLbl and banLbl.Parent do
+        t=t+0.04
+        banLbl.TextColor3 = C.purpleL:Lerp(C.cyan,(math.sin(t)+1)/2)
+        task.wait(0.03)
+    end
+end)
+banLbl.MouseButton1Click:Connect(function()
+    pcall(function() setclipboard("https://discord.gg/69xw56bg2J") end)
+    notify("BranZZ","Discord copiado!",3)
+end)
+
+-- ============================================================
+-- JANELA PRINCIPAL
+-- ============================================================
+local WIN_W=390; local WIN_H=540; local HDR_H=46; local TAB_H=32
+
+local Main = Instance.new("Frame", sg)
+Main.Name             = "Main"
+Main.Size             = UDim2.new(0,WIN_W,0,WIN_H)
+Main.Position         = UDim2.new(0.5,-WIN_W/2,0.5,-WIN_H/2)
+Main.BackgroundColor3 = C.bg
+Main.BorderSizePixel  = 0
+Main.ClipsDescendants = true
+corner(Main,14)
+local mainGrad = Instance.new("UIGradient",Main)
+mainGrad.Color    = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(14,10,26)),ColorSequenceKeypoint.new(1,C.bg)})
+mainGrad.Rotation = 135
+local mainStr = stroke(Main,C.purple,1.8)
+animHue(mainStr,"Color",0.005)
+
+-- Header / drag
+local Hdr = Instance.new("Frame",Main)
+Hdr.Size             = UDim2.new(1,0,0,HDR_H)
+Hdr.BackgroundColor3 = Color3.fromRGB(10,8,20)
+Hdr.BorderSizePixel  = 0
+corner(Hdr,14)
+local hFix = Instance.new("Frame",Hdr)
+hFix.Size             = UDim2.new(1,0,0,14)
+hFix.Position         = UDim2.new(0,0,1,-14)
+hFix.BackgroundColor3 = Color3.fromRGB(10,8,20)
+hFix.BorderSizePixel  = 0
+stroke(Hdr,C.bd,1)
+local acc = Instance.new("Frame",Hdr)
+acc.Size=UDim2.new(0,3,0,28) acc.Position=UDim2.new(0,0,0.5,-14)
+acc.BackgroundColor3=C.purpleL acc.BorderSizePixel=0 corner(acc,2)
+animHue(acc,"BackgroundColor3",0.006)
+local titleL = Instance.new("TextLabel",Hdr)
+titleL.Size=UDim2.new(0.6,0,1,0) titleL.Position=UDim2.new(0,10,0,0)
+titleL.BackgroundTransparency=1 titleL.Text="🎯 BranZZ Brainrot v2"
+titleL.TextColor3=C.tx titleL.Font=Enum.Font.GothamBold titleL.TextSize=13
+titleL.TextXAlignment=Enum.TextXAlignment.Left
+local closeB = Instance.new("TextButton",Hdr)
+closeB.Size=UDim2.new(0,28,0,28) closeB.Position=UDim2.new(1,-34,0.5,-14)
+closeB.BackgroundColor3=C.red closeB.BorderSizePixel=0
+closeB.Text="✕" closeB.TextColor3=Color3.fromRGB(255,255,255)
+closeB.Font=Enum.Font.GothamBold closeB.TextSize=13 closeB.AutoButtonColor=false
+corner(closeB,7)
+closeB.MouseButton1Click:Connect(function() saveState(); destroyPlatform(); clearESP(); sg:Destroy() end)
+
+-- Drag
+local drag,dragIn,dragSt,dragPs
+Hdr.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+        drag=true; dragSt=i.Position; dragPs=Main.Position
+        i.Changed:Connect(function() if i.UserInputState==Enum.UserInputState.End then drag=false end end)
+    end
+end)
+Hdr.InputChanged:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch then dragIn=i end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if i==dragIn and drag then
+        local d=i.Position-dragSt
+        Main.Position=UDim2.new(dragPs.X.Scale,dragPs.X.Offset+d.X,dragPs.Y.Scale,dragPs.Y.Offset+d.Y)
+    end
+end)
+
+-- ============================================================
+-- ABAS
+-- ============================================================
+local tabBar = Instance.new("Frame",Main)
+tabBar.Size=UDim2.new(1,0,0,TAB_H) tabBar.Position=UDim2.new(0,0,0,HDR_H)
+tabBar.BackgroundColor3=Color3.fromRGB(8,6,16) tabBar.BorderSizePixel=0
+local tabUL=Instance.new("UIListLayout",tabBar)
+tabUL.FillDirection=Enum.FillDirection.Horizontal
+tabUL.SortOrder=Enum.SortOrder.LayoutOrder
+tabUL.HorizontalAlignment=Enum.HorizontalAlignment.Center
+tabUL.Padding=UDim.new(0,4)
+
+local Scroll=Instance.new("ScrollingFrame",Main)
+Scroll.BackgroundTransparency=1
+Scroll.Position=UDim2.new(0,6,0,HDR_H+TAB_H+4)
+Scroll.Size=UDim2.new(1,-12,1,-(HDR_H+TAB_H+10))
+Scroll.CanvasSize=UDim2.new(0,0,0,0)
+Scroll.ScrollBarThickness=3
+Scroll.ScrollBarImageColor3=C.purpleL
+Scroll.BorderSizePixel=0
+local CL=Instance.new("UIListLayout",Scroll)
+CL.Padding=UDim.new(0,5) CL.SortOrder=Enum.SortOrder.LayoutOrder
+CL.HorizontalAlignment=Enum.HorizontalAlignment.Center
+CL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    Scroll.CanvasSize=UDim2.new(0,0,0,CL.AbsoluteContentSize.Y+12)
+end)
+
+local tabFrames={}
+local tabBtns={}
+local TABS={"Main","Others"}
+for _,tn in ipairs(TABS) do
+    local f=Instance.new("Frame",Scroll)
+    f.Name="Tab_"..tn f.Size=UDim2.new(1,-4,0,0)
+    f.AutomaticSize=Enum.AutomaticSize.Y f.BackgroundTransparency=1
+    f.BorderSizePixel=0 f.Visible=(tn=="Main")
+    local fl=Instance.new("UIListLayout",f)
+    fl.Padding=UDim.new(0,5) fl.SortOrder=Enum.SortOrder.LayoutOrder
+    fl.HorizontalAlignment=Enum.HorizontalAlignment.Center
+    tabFrames[tn]=f
+end
+
+local function switchTab(name)
+    S.currentTab=name
+    for _,t in ipairs(TABS) do
+        local f=tabFrames[t]; local b=tabBtns[t]
+        if f then f.Visible=(t==name) end
+        if b then
+            TweenService:Create(b,TweenInfo.new(0.18),{
+                BackgroundColor3=t==name and C.s3 or Color3.fromRGB(8,6,16),
+                TextColor3=t==name and C.purpleL or C.sub,
+            }):Play()
+        end
+    end
+    Scroll.CanvasPosition=Vector2.new(0,0)
+end
+
+for i,tn in ipairs(TABS) do
+    local b=Instance.new("TextButton",tabBar)
+    b.Size=UDim2.new(0,152,1,-6)
+    b.BackgroundColor3=tn=="Main" and C.s3 or Color3.fromRGB(8,6,16)
+    b.BorderSizePixel=0
+    b.Text=tn=="Main" and "⚡ Main" or "🛠 Others"
+    b.TextColor3=tn=="Main" and C.purpleL or C.sub
+    b.Font=Enum.Font.GothamBold b.TextSize=12 b.AutoButtonColor=false b.LayoutOrder=i
+    corner(b,7) tabBtns[tn]=b
+    b.MouseButton1Click:Connect(function() switchTab(tn) end)
+end
+
+-- ============================================================
+-- BUILDERS UI
+-- ============================================================
+local VisualSetters={}
+
+local function mkSection(parent,title,order)
+    local f=Instance.new("Frame",parent)
+    f.BackgroundColor3=Color3.fromRGB(12,9,24)
+    f.Size=UDim2.new(1,-4,0,24) f.LayoutOrder=order f.BorderSizePixel=0
+    corner(f,6) stroke(f,C.purple,1.5)
+    local l=Instance.new("TextLabel",f)
+    l.BackgroundTransparency=1 l.Size=UDim2.new(1,-8,1,0)
+    l.Position=UDim2.new(0,8,0,0) l.Font=Enum.Font.GothamBold
+    l.Text=title l.TextColor3=Color3.fromRGB(180,130,255)
+    l.TextSize=11 l.TextXAlignment=Enum.TextXAlignment.Left
+    return f
+end
+
+local function mkToggle(parent,label,key,cb,order)
+    local row=Instance.new("Frame",parent)
+    row.BackgroundColor3=Color3.fromRGB(14,8,28)
+    row.Size=UDim2.new(1,-4,0,40) row.LayoutOrder=order row.BorderSizePixel=0
+    corner(row,8) stroke(row,C.purpleDim,1.5)
+    local lbl=Instance.new("TextLabel",row)
+    lbl.BackgroundTransparency=1 lbl.Size=UDim2.new(0.72,0,1,0)
+    lbl.Position=UDim2.new(0,8,0,0) lbl.Font=Enum.Font.GothamBold
+    lbl.Text=label lbl.TextColor3=Color3.fromRGB(210,200,230)
+    lbl.TextSize=12 lbl.TextXAlignment=Enum.TextXAlignment.Left lbl.TextWrapped=true
+    local isOn=S[key] or false
+    local tbg=Instance.new("Frame",row)
+    tbg.Size=UDim2.new(0,40,0,20) tbg.Position=UDim2.new(1,-48,0.5,-10)
+    tbg.BackgroundColor3=isOn and C.purpleL or Color3.fromRGB(30,15,55)
+    tbg.BorderSizePixel=0 corner(tbg,999)
+    local dot=Instance.new("Frame",tbg)
+    dot.Size=UDim2.new(0,14,0,14)
+    dot.Position=isOn and UDim2.new(1,-17,0.5,-7) or UDim2.new(0,3,0.5,-7)
+    dot.BackgroundColor3=Color3.new(1,1,1) dot.BorderSizePixel=0 corner(dot,999)
+    local btn=Instance.new("TextButton",row)
+    btn.Size=UDim2.new(1,0,1,0) btn.BackgroundTransparency=1 btn.Text="" btn.ZIndex=5
+    local function setV(state,skipCb)
+        isOn=state; S[key]=state
+        TweenService:Create(tbg,TweenInfo.new(0.22),{BackgroundColor3=isOn and C.purpleL or Color3.fromRGB(30,15,55)}):Play()
+        TweenService:Create(dot,TweenInfo.new(0.22,Enum.EasingStyle.Back),{
+            Position=isOn and UDim2.new(1,-17,0.5,-7) or UDim2.new(0,3,0.5,-7)
+        }):Play()
+        if not skipCb then cb(isOn) end
+    end
+    VisualSetters[key]=setV
+    btn.MouseButton1Click:Connect(function() setV(not isOn) end)
+    return row,setV
+end
+
+local function mkButton(parent,label,color,cb,order)
+    local b=Instance.new("TextButton",parent)
+    b.BackgroundColor3=color or C.s2
+    b.Size=UDim2.new(1,-4,0,36) b.LayoutOrder=order b.BorderSizePixel=0
+    b.Font=Enum.Font.GothamBold b.Text=label
+    b.TextColor3=Color3.fromRGB(220,220,240) b.TextSize=12 b.AutoButtonColor=false
+    corner(b,8) stroke(b,C.purpleDim,1.5)
+    b.MouseEnter:Connect(function() TweenService:Create(b,TweenInfo.new(0.12),{BackgroundColor3=C.s4}):Play() end)
+    b.MouseLeave:Connect(function() TweenService:Create(b,TweenInfo.new(0.12),{BackgroundColor3=color or C.s2}):Play() end)
+    b.MouseButton1Click:Connect(cb)
+    return b
+end
+
+local function mkSlider(parent,label,minV,maxV,key,cb,order)
+    local con=Instance.new("Frame",parent)
+    con.BackgroundColor3=Color3.fromRGB(14,8,28)
+    con.Size=UDim2.new(1,-4,0,50) con.LayoutOrder=order con.BorderSizePixel=0
+    corner(con,8) stroke(con,C.purpleDim,1.5)
+    local lf=Instance.new("TextLabel",con)
+    lf.BackgroundTransparency=1 lf.Size=UDim2.new(0.85,0,0,16)
+    lf.Position=UDim2.new(0,8,0,4) lf.Font=Enum.Font.GothamBold
+    lf.Text=label..": "..tostring(S[key])
+    lf.TextColor3=Color3.fromRGB(200,170,240) lf.TextSize=11
+    lf.TextXAlignment=Enum.TextXAlignment.Left
+    local sbg=Instance.new("Frame",con)
+    sbg.BackgroundColor3=Color3.fromRGB(20,12,40)
+    sbg.Position=UDim2.new(0,8,0,26) sbg.Size=UDim2.new(1,-16,0,10) corner(sbg,999)
+    local pct=math.clamp((S[key]-minV)/(maxV-minV),0,1)
+    local fill=Instance.new("Frame",sbg)
+    fill.BackgroundColor3=C.purpleL fill.Size=UDim2.new(pct,0,1,0) fill.BorderSizePixel=0 corner(fill,999)
+    local knob=Instance.new("Frame",sbg)
+    knob.BackgroundColor3=Color3.new(1,1,1)
+    knob.Size=UDim2.new(0,14,0,14) knob.Position=UDim2.new(pct,-7,0.5,-7)
+    knob.BorderSizePixel=0 corner(knob,999) stroke(knob,C.purpleL,2)
+    local sb=Instance.new("TextButton",sbg)
+    sb.Size=UDim2.new(1,0,3,0) sb.Position=UDim2.new(0,0,-1,0)
+    sb.BackgroundTransparency=1 sb.Text="" sb.ZIndex=5
+    local ds=false
+    sb.MouseButton1Down:Connect(function() ds=true end)
+    UserInputService.InputEnded:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then ds=false end
+    end)
+    UserInputService.InputChanged:Connect(function(i)
+        if ds and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+            local rel=math.clamp((i.Position.X-sbg.AbsolutePosition.X)/sbg.AbsoluteSize.X,0,1)
+            fill.Size=UDim2.new(rel,0,1,0)
+            knob.Position=UDim2.new(rel,-7,0.5,-7)
+            local val=math.floor(minV+(maxV-minV)*rel)
+            S[key]=val lf.Text=label..": "..tostring(val) cb(val)
+        end
+    end)
+    return con
+end
+
+-- ============================================================
+-- ABA MAIN
+-- ============================================================
+local mTab=tabFrames["Main"]
+
+mkSection(mTab,"⚙️  FUNCTIONS",1)
+mkButton(mTab,"📍 Mark Position",C.s2,function() markPosition() end,2)
+
+mkToggle(mTab,"⚡ Tp Flash v2","tpFlashOn",function(v)
+    if v then startTpFlash() else stopTpFlash() end
+end,3)
+
+mkSection(mTab,"🌀  TP TWEEN",4)
+mkToggle(mTab,"🌀 Tp Tween (zigzag → posição marcada)","tpTweenOn",function(v)
+    if v then startTpTween(markedPos) else stopTpTween() end
+end,5)
+mkSlider(mTab,"Velocidade",5,100,"tweenSpeed",function() end,6)
+
+mkSection(mTab,"🛡️  SECURE PLATFORM",7)
+
+-- Info da keybind
+local keyInfoF=Instance.new("Frame",mTab)
+keyInfoF.BackgroundColor3=Color3.fromRGB(14,8,28)
+keyInfoF.Size=UDim2.new(1,-4,0,34) keyInfoF.LayoutOrder=8 keyInfoF.BorderSizePixel=0
+corner(keyInfoF,8) stroke(keyInfoF,C.purpleDim,1.5)
+local keyInfoL=Instance.new("TextLabel",keyInfoF)
+keyInfoL.BackgroundTransparency=1 keyInfoL.Size=UDim2.new(1,-8,1,0)
+keyInfoL.Position=UDim2.new(0,8,0,0)
+keyInfoL.Text="⌨️ Tecla ativar/desativar plataforma: [ P ]"
+keyInfoL.TextColor3=C.yellow keyInfoL.Font=Enum.Font.GothamBold
+keyInfoL.TextSize=11 keyInfoL.TextXAlignment=Enum.TextXAlignment.Left
+
+mkToggle(mTab,"🪨 Secure Platform","platformOn",function(v)
+    if v then
+        buildPlatform()
+        startPlatformLoop()
+        notify("Platform","Plataforma criada! Use ⬆⬇ nos botões.",4)
+    else
+        destroyPlatform()
+        notify("Platform","Plataforma removida.",3)
+    end
+end,9)
+mkSlider(mTab,"Velocidade plataforma",1,40,"platSpeed",function() end,10)
+
+mkSection(mTab,"🦘  JUMP + LOW GRAVITY",11)
+mkToggle(mTab,"☁️ JumpPower + Low Gravity","jumpGravOn",function(v)
+    if v then startJumpGrav() else stopJumpGrav() end
+end,12)
+mkSlider(mTab,"Jump Power",10,300,"jumpPower",function(v)
+    local c=LP.Character
+    if c then local h=c:FindFirstChildOfClass("Humanoid") if h then h.JumpPower=v end end
+end,13)
+
+-- ============================================================
+-- ABA OTHERS
+-- ============================================================
+local oTab=tabFrames["Others"]
+
+mkSection(oTab,"🔒  ANTI ADMIN",1)
+mkToggle(oTab,"🚫 Anti Admin","antiAdminOn",function(v)
+    if v then startAntiAdmin() else stopAntiAdmin() end
+end,2)
+
+mkSection(oTab,"👁  ESP BEST BRAINROTS",3)
+mkToggle(oTab,"👁 ESP Best Brainrots","espOn",function(v)
+    if not v then clearESP(); notifiedKeys={}; lastESPSig="" end
+end,4)
+
+local espInfoF=Instance.new("Frame",oTab)
+espInfoF.BackgroundColor3=C.s1 espInfoF.Size=UDim2.new(1,-4,0,90)
+espInfoF.LayoutOrder=5 espInfoF.BorderSizePixel=0 corner(espInfoF,8) stroke(espInfoF,C.bd,1)
+local espInfoL=Instance.new("TextLabel",espInfoF)
+espInfoL.Size=UDim2.new(1,-10,1,-10) espInfoL.Position=UDim2.new(0,5,0,5)
+espInfoL.BackgroundTransparency=1
+espInfoL.Text="🟡 Linha AMARELA → brainrot normal\n🟠 Linha LARANJA/ROSA → lendário\n🔴 Linha VERMELHA → Não Chorax / Urubini\n⚪ Linha BRANCA → base do dono"
+espInfoL.TextColor3=C.sub espInfoL.Font=Enum.Font.Gotham espInfoL.TextSize=11
+espInfoL.TextXAlignment=Enum.TextXAlignment.Left espInfoL.TextYAlignment=Enum.TextYAlignment.Top
+espInfoL.TextWrapped=true
+
+-- ============================================================
+-- BOTÕES FLUTUANTES (direita da tela)
+-- ============================================================
+local function mkFloatBtn(label,posY,color,cb)
+    local btn=Instance.new("TextButton",sg)
+    btn.Size=UDim2.new(0,60,0,60)
+    btn.Position=UDim2.new(1,-72,0,posY)
+    btn.BackgroundColor3=color btn.BorderSizePixel=0
+    btn.Text="" btn.AutoButtonColor=false corner(btn,99)
+    local bs=stroke(btn,C.cyan,2.2)
+    task.spawn(function()
+        local hue=0 while btn and btn.Parent do
+            hue=(hue+0.01)%1 bs.Color=Color3.fromHSV(hue,0.9,1) task.wait(0.05)
+        end
+    end)
+    local ll=Instance.new("TextLabel",btn)
+    ll.Size=UDim2.new(1,0,1,0) ll.BackgroundTransparency=1
+    ll.Text=label ll.TextColor3=Color3.fromRGB(255,255,255)
+    ll.Font=Enum.Font.GothamBold ll.TextSize=10 ll.TextWrapped=true
+    ll.TextXAlignment=Enum.TextXAlignment.Center
+    -- Drag
+    local fd,fs,fp,fdist
+    btn.InputBegan:Connect(function(i)
+        if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+            fd=true; fs=i.Position; fp=btn.Position; fdist=0
+            i.Changed:Connect(function()
+                if i.UserInputState==Enum.UserInputState.End then
+                    fd=false
+                    if fdist<8 then cb(btn,ll) end
+                end
+            end)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(i)
+        if fd and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+            local d=i.Position-fs fdist=d.Magnitude
+            btn.Position=UDim2.new(fp.X.Scale,fp.X.Offset+d.X,fp.Y.Scale,fp.Y.Offset+d.Y)
+        end
+    end)
+    -- pulse
+    local c2=Color3.fromRGB(math.clamp(color.R*255-35,0,255),math.clamp(color.G*255-35,0,255),math.clamp(color.B*255-35,0,255))
+    task.spawn(function()
+        while btn and btn.Parent do
+            TweenService:Create(btn,TweenInfo.new(1,Enum.EasingStyle.Sine,Enum.EasingDirection.InOut),{BackgroundColor3=c2}):Play()
+            task.wait(1)
+            TweenService:Create(btn,TweenInfo.new(1,Enum.EasingStyle.Sine,Enum.EasingDirection.InOut),{BackgroundColor3=color}):Play()
+            task.wait(1)
+        end
+    end)
+    return btn,ll
+end
+
+-- Posições Y fixas na tela (pixels do topo)
+local Y1=180; local Y2=248; local Y3=316; local Y4=384; local Y5=452
+
+-- Botão 1: TP Flash
+local tfState=false
+local tfB,tfL=mkFloatBtn("TP\nFLASH",Y1,Color3.fromRGB(0,100,210),function(btn,lbl)
+    tfState=not tfState; S.tpFlashOn=tfState
+    lbl.Text=tfState and "TP\n✅" or "TP\nFLASH"
+    if VisualSetters.tpFlashOn then VisualSetters.tpFlashOn(tfState,true) end
+    if tfState then startTpFlash() else stopTpFlash() end
+end)
+
+-- Botão 2: TP Tween
+local ttState=false
+local ttB,ttL=mkFloatBtn("TWEEN",Y2,Color3.fromRGB(0,130,80),function(btn,lbl)
+    ttState=not ttState; S.tpTweenOn=ttState
+    lbl.Text=ttState and "TWEEN\n✅" or "TWEEN"
+    if VisualSetters.tpTweenOn then VisualSetters.tpTweenOn(ttState,true) end
+    if ttState then startTpTween(markedPos) else stopTpTween() end
+end)
+
+-- Botão 3: Plataforma SOBE (contínuo enquanto segura não, mas no clique muda direção)
+mkFloatBtn("PLAT\n⬆",Y3,Color3.fromRGB(80,30,160),function(btn,lbl)
+    if not platPart then notify("Platform","Ative a plataforma primeiro!",3) return end
+    platSpeedDir=1; platPaused=false
+    notify("Platform","⬆ Subindo...",2)
+end)
+
+-- Botão 4: Plataforma DESCE
+mkFloatBtn("PLAT\n⬇",Y4,Color3.fromRGB(55,20,120),function(btn,lbl)
+    if not platPart then notify("Platform","Ative a plataforma primeiro!",3) return end
+    platSpeedDir=-1; platPaused=false
+    notify("Platform","⬇ Descendo...",2)
+end)
+
+-- Botão 5: PAUSE / PLAY
+local ppState=false
+mkFloatBtn("PLAT\n⏸",Y5,Color3.fromRGB(130,55,0),function(btn,lbl)
+    if not platPart then notify("Platform","Ative a plataforma primeiro!",3) return end
+    ppState=not ppState; platPaused=ppState
+    lbl.Text=ppState and "PLAT\n▶" or "PLAT\n⏸"
+    notify("Platform",ppState and "⏸ Pausado!" or "▶ Retomado!",2)
+end)
+
+-- ============================================================
+-- BOTÃO CIRCULAR (toggle UI)
+-- ============================================================
+local circ=Instance.new("TextButton",sg)
+circ.Size=UDim2.new(0,60,0,60) circ.Position=UDim2.new(0,14,0.5,-30)
+circ.BackgroundColor3=Color3.fromRGB(8,6,14) circ.BorderSizePixel=0
+circ.Text="" circ.AutoButtonColor=false corner(circ,99)
+local cStr=stroke(circ,C.purpleL,2.5) animHue(cStr,"Color",0.007)
+local cL1=Instance.new("TextLabel",circ)
+cL1.Size=UDim2.new(1,0,0.55,0) cL1.BackgroundTransparency=1
+cL1.Text="BZ" cL1.TextColor3=C.purpleL cL1.Font=Enum.Font.GothamBold
+cL1.TextSize=16 cL1.TextXAlignment=Enum.TextXAlignment.Center
+local cL2=Instance.new("TextLabel",circ)
+cL2.Size=UDim2.new(1,0,0.4,0) cL2.Position=UDim2.new(0,0,0.58,0)
+cL2.BackgroundTransparency=1 cL2.Text="v2"
+cL2.TextColor3=Color3.fromRGB(200,180,255) cL2.Font=Enum.Font.GothamBold
+cL2.TextSize=10 cL2.TextXAlignment=Enum.TextXAlignment.Center
+local cd,cs,cp,cdist
+circ.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+        cd=true; cs=i.Position; cp=circ.Position; cdist=0
+        i.Changed:Connect(function()
+            if i.UserInputState==Enum.UserInputState.End then
+                cd=false
+                if cdist<8 then Main.Visible=not Main.Visible end
+            end
+        end)
+    end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if cd and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+        local d=i.Position-cs cdist=d.Magnitude
+        circ.Position=UDim2.new(cp.X.Scale,cp.X.Offset+d.X,cp.Y.Scale,cp.Y.Offset+d.Y)
+    end
+end)
+
+-- ============================================================
+-- KEYBINDS
+-- ============================================================
+-- Teclas bloqueadas (não usar): 1-0, W,A,S,D, Espaço
+local BLOCKED = {
+    [Enum.KeyCode.One]=true,[Enum.KeyCode.Two]=true,[Enum.KeyCode.Three]=true,
+    [Enum.KeyCode.Four]=true,[Enum.KeyCode.Five]=true,[Enum.KeyCode.Six]=true,
+    [Enum.KeyCode.Seven]=true,[Enum.KeyCode.Eight]=true,[Enum.KeyCode.Nine]=true,
+    [Enum.KeyCode.Zero]=true,
+    [Enum.KeyCode.W]=true,[Enum.KeyCode.A]=true,[Enum.KeyCode.S]=true,
+    [Enum.KeyCode.D]=true,[Enum.KeyCode.Space]=true,
+}
+
+UserInputService.InputBegan:Connect(function(inp,gpe)
+    if gpe then return end
+    if BLOCKED[inp.KeyCode] then return end
+
+    -- P = toggle plataforma
+    if inp.KeyCode == Enum.KeyCode.P then
+        local newState = not S.platformOn
+        if VisualSetters.platformOn then VisualSetters.platformOn(newState,true) end
+        S.platformOn = newState
+        if newState then
+            buildPlatform()
+            startPlatformLoop()
+            notify("Platform","[P] Plataforma ON",3)
+        else
+            destroyPlatform()
+            notify("Platform","[P] Plataforma OFF",3)
+        end
+
+    -- M = mark position
+    elseif inp.KeyCode == Enum.KeyCode.M then
+        markPosition()
+
+    -- Delete = fecha UI
+    elseif inp.KeyCode == Enum.KeyCode.Delete then
+        saveState(); destroyPlatform(); clearESP(); sg:Destroy()
+    end
+end)
+
+-- ============================================================
+-- LOOP ESP (a cada 3s)
+-- ============================================================
+local espTick=0
+RunService.Heartbeat:Connect(function(dt)
+    espTick+=dt
+    if espTick>=3 then
+        espTick=0
+        if S.espOn then
+            task.spawn(function()
+                -- Atualiza linhas com posição atual do player
+                local c=LP.Character
+                if c then
+                    local hrp=c:FindFirstChild("HumanoidRootPart")
+                    if hrp then
+                        for _,l in ipairs(espLines) do pcall(function() l:Destroy() end) end
+                        espLines={}
+                        lastESPSig="" -- força rebuild
+                    end
+                end
+                runESP()
+            end)
+        end
+    end
+end)
+
+-- ============================================================
+-- APLICA SAVES
+-- ============================================================
+task.delay(0.6,function()
+    local keys={"tpFlashOn","tpTweenOn","jumpGravOn","espOn","antiAdminOn","platformOn"}
+    for _,k in ipairs(keys) do
+        if S[k] and VisualSetters[k] then VisualSetters[k](true,true) end
+    end
+    if S.tpFlashOn  then startTpFlash()  end
+    if S.jumpGravOn then startJumpGrav() end
+    if S.antiAdminOn then startAntiAdmin() end
+    if S.espOn then task.spawn(runESP) end
+    if S.platformOn then
+        buildPlatform()
+        startPlatformLoop()
+    end
+end)
+
+notify("BranZZ Hub","Brainrot v2.0 carregado! 💜  [P]=Plataforma [M]=Marcar",6)
+print("[BranZZ Hub Brainrot v2] OK")
