@@ -1,0 +1,188 @@
+-- ============================================================
+--   BranZZ Webhook Sender
+--   Detecta brainrots e envia pro Discord
+-- ============================================================
+
+local Players          = game:GetService("Players")
+local Workspace        = game:GetService("Workspace")
+local HttpService      = game:GetService("HttpService")
+local StarterGui       = game:GetService("StarterGui")
+
+local LP               = Players.LocalPlayer
+local WEBHOOK          = "https://discord.com/api/webhooks/1452036308913361000/QuuLg_EmD2vRXDloM2_L498PxhqvZqH2NKDqobiILmnwncP0pqvsZwXtho5ihLTo7lmO"
+local WEBHOOK_PROXY    = WEBHOOK:gsub("discord.com", "hooks.hyra.io")
+
+local function notify(t, m)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {Title=t, Text=m, Duration=4})
+    end)
+end
+
+-- ============================================================
+-- PARSE VALOR
+-- ============================================================
+local function parseValue(text)
+    if not text then return 0 end
+    text = tostring(text):gsub("%s",""):gsub("/s","")
+    local numStr, suffix = text:match("([%d%.]+)([KkMmBbTtQq]?)")
+    if not numStr then return 0 end
+    local num = tonumber(numStr) or 0
+    local mult = ({K=1e3,M=1e6,B=1e9})[suffix:upper()] or 1
+    return num * mult
+end
+
+-- ============================================================
+-- SCAN (estrutura do Esp_Best: Debris > FastOverheadTemplate)
+-- + estrutura do BranZZ: Bases > Slots > BrainrotBillboard
+-- ============================================================
+local function scanAll()
+    local results = {}
+    local seen    = {}
+
+    -- Método 1: Debris/FastOverheadTemplate (do Esp_Best)
+    local debris = Workspace:FindFirstChild("Debris")
+    if debris then
+        for _, item in ipairs(debris:GetChildren()) do
+            if item.Name == "FastOverheadTemplate" then
+                local sg = item:FindFirstChildOfClass("SurfaceGui")
+                if sg and sg.Adornee then
+                    local genL  = sg:FindFirstChild("Generation", true)
+                    local nameL = sg:FindFirstChild("DisplayName", true)
+                    local name  = nameL and nameL.Text or "Unknown"
+                    local gen   = genL  and genL.Text  or "?"
+                    local val   = parseValue(gen)
+                    local key   = name.."|"..gen
+                    if not seen[key] and name ~= "" and name ~= "Unknown" then
+                        seen[key] = true
+                        table.insert(results, {name=name, gen=gen, val=val})
+                    end
+                end
+            end
+        end
+    end
+
+    -- Método 2: Bases/Slots/BrainrotBillboard (do BranZZ Finder)
+    local bases = Workspace:FindFirstChild("Bases")
+    if bases then
+        for _, base in ipairs(bases:GetChildren()) do
+            local sf = base:FindFirstChild("Slots")
+            if not sf then
+                for _, d in ipairs(base:GetDescendants()) do
+                    if d.Name == "Slots" then sf = d break end
+                end
+            end
+            if sf then
+                for i = 1, 100 do
+                    local sObj = sf:FindFirstChild("s"..i)
+                    if sObj then
+                        for _, desc in ipairs(sObj:GetDescendants()) do
+                            if desc.Name == "BrainrotBillboard" then
+                                pcall(function()
+                                    local labels = {}
+                                    for _, o in ipairs(desc:GetDescendants()) do
+                                        if o:IsA("TextLabel") then
+                                            local t = (o.Text or o.ContentText or ""):match("^%s*(.-)%s*$")
+                                            if t and t ~= "" and t ~= " " then
+                                                local dup = false
+                                                for _, ex in ipairs(labels) do if ex==t then dup=true break end end
+                                                if not dup then table.insert(labels, t) end
+                                            end
+                                        end
+                                    end
+                                    if #labels == 0 then return end
+                                    local name = labels[1] or "Unknown"
+                                    local gen  = #labels > 1 and labels[2] or "?"
+                                    local val  = parseValue(gen)
+                                    local key  = name.."|"..gen
+                                    if not seen[key] then
+                                        seen[key] = true
+                                        table.insert(results, {name=name, gen=gen, val=val})
+                                    end
+                                end)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Ordena por valor
+    table.sort(results, function(a,b) return a.val > b.val end)
+    return results
+end
+
+-- ============================================================
+-- ENVIA WEBHOOK
+-- ============================================================
+local function sendWebhook(results)
+    local playerCount = #Players:GetPlayers()
+    local qty         = #results
+
+    -- Monta lista de brainrots
+    local lines = ""
+    for i, item in ipairs(results) do
+        local medal = i==1 and "🥇" or (i==2 and "🥈" or (i==3 and "🥉" or "▫️"))
+        lines = lines .. medal .. " **"..item.name.."** — `"..item.gen.."`\n"
+    end
+    if lines == "" then lines = "Nenhum brainrot encontrado." end
+
+    -- Display name do executor
+    local execName    = LP.Name
+    local execDisplay = LP.DisplayName ~= "" and LP.DisplayName or LP.Name
+    local execInfo    = execDisplay.." (`"..execName.."`)"
+
+    local payload = HttpService:JSONEncode({
+        content = "@everyone @here\n**New Metodh Trade** 🇧🇷",
+        embeds  = {{
+            color  = 9699539, -- roxo
+            fields = {
+                {
+                    name   = "👤 Player executor",
+                    value  = execInfo,
+                    inline = true,
+                },
+                {
+                    name   = "👥 Players in server",
+                    value  = tostring(playerCount),
+                    inline = true,
+                },
+                {
+                    name   = "📊 Quantity of Brainrots",
+                    value  = tostring(qty),
+                    inline = true,
+                },
+                {
+                    name   = "🧠 Brainrots detected",
+                    value  = lines ~= "" and lines or "Nenhum detectado.",
+                    inline = false,
+                },
+            },
+            footer    = {text = "BranZZ Sender • Steal a Brainrot"},
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+        }},
+    })
+
+    local ok, err = pcall(function()
+        HttpService:PostAsync(WEBHOOK_PROXY, payload, Enum.HttpContentType.ApplicationJson, false)
+    end)
+
+    if ok then
+        notify("BranZZ","✅ Webhook enviado! ("..qty.." brainrots)")
+    else
+        -- Tenta direto se proxy falhar
+        pcall(function()
+            HttpService:PostAsync(WEBHOOK, payload, Enum.HttpContentType.ApplicationJson, false)
+        end)
+        notify("BranZZ","⚠️ Enviado via fallback")
+    end
+end
+
+-- ============================================================
+-- EXECUTA
+-- ============================================================
+notify("BranZZ","🔍 Detectando brainrots...")
+task.wait(1.5)
+
+local results = scanAll()
+sendWebhook(results)
