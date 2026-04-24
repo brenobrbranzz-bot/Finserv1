@@ -175,7 +175,7 @@ local function sendWebhook(name, rarity, value, jobId, isUltra)
     }
 
     local embedDemo = {
-        title = "Divini LOGS HIGHLIGHT",
+        title = " BRANZZ LOGS HIGHLIGHT",
         description = "**" .. name .. "**",
         color = 49151,
         fields = {{name = "💰 Geração", value = "```"..value.."```", inline = true}},
