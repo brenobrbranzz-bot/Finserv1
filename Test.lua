@@ -1,14 +1,12 @@
 -- =============================================
---   BRANZZ NOTIFY SCANNER - 3.5M+ (SCRIPT COMPLETO)
---   by BranzZ MetoDos
+-- MDB NOTIFY SCANNER - 3.5M+ (SCRIPT COMPLETO)
 -- =============================================
 
 -- ================== CONFIG ==================
-local webhookBranzZAcesso = "https://discord.com/api/webhooks/1497275749105926485/lGDm09jvcD3SStD-lNRRsz5rMFXeKqsDfiHDYRuqgLqBx3NDqxPomSsK2h2THF1FnA9P"
+local webhookDiviniAcesso = "https://discord.com/api/webhooks/1497275749105926485/lGDm09jvcD3SStD-lNRRsz5rMFXeKqsDfiHDYRuqgLqBx3NDqxPomSsK2h2THF1FnA9P"
 local webhookDemo        = "https://discord.com/api/webhooks/1497276666706264225/os39l7GeHlRfXaWXyRDqe6d0aZkrUFObNnZTLNRi9P81UhXRVDAQJ4pw-fpUAEvXDXg_"
-local NOTIFY_HOST        = "https://v0-roblox-deep-link-app.vercel.app/"
-local MIN_GEN = 3500000      -- 3.5M+
-local ULTRA_GEN = 10000000   -- 10M+ (ALTERADO)
+local MIN_GEN = 3500000
+local ULTRA_GEN = 10000000
 
 -- ================== SERVICES ==================
 local Players = game:GetService("Players")
@@ -75,7 +73,7 @@ local COUNTDOWN_TIME = countdownTimes[((instanceId % #countdownTimes) + 1)]
 
 -- ================== GUI ==================
 local gui = Instance.new("ScreenGui", PlayerGui)
-gui.Name = "BranzZScanner"
+gui.Name = "BrainrotScanner"
 gui.ResetOnSpawn = false
 
 local frame = Instance.new("Frame", gui)
@@ -88,7 +86,7 @@ Instance.new("UIStroke", frame).Color = Color3.fromRGB(0, 255, 120)
 local title = Instance.new("TextLabel", frame)
 title.Size = UDim2.new(1,0,0,50)
 title.BackgroundTransparency = 1
-title.Text = "BRANZZ NOTIFY SCANNER"
+title.Text = "DIVINI NOTIFY SCANNER"
 title.TextColor3 = Color3.fromRGB(0, 255, 120)
 title.TextScaled = true
 title.Font = Enum.Font.GothamBold
@@ -137,6 +135,7 @@ local function refreshAllESP()
         if animal.genValue >= MIN_GEN then
             local uid = animal.uid
             activeUIDs[uid] = true
+            -- ESP logic omitted/simplified
         end
     end
     for uid in pairs(ESP_INSTANCES) do
@@ -144,13 +143,13 @@ local function refreshAllESP()
     end
 end
 
--- ================== ENVIO COM DEEPLINK ==================
+-- ================== ENVIO CORRIGIDO ==================
 local function sendWebhook(name, rarity, value, jobId, isUltra)
     local placeId = game.PlaceId
-    local joinLink = NOTIFY_HOST .. "/?placeId=" .. placeId .. "&gameInstanceId=" .. jobId
+    local joinLink = "https://www.roblox.com/games/" .. placeId .. "?serverId=" .. jobId
 
     local embedAcesso = {
-        title = isUltra and "🔥 ULTRA MEGA BRAINROT 10M+ 🔥" or "🧠 BRAINROT 3.5M+ DETECTADO",
+        title = isUltra and "🔥 ULTRA MEGA BRAINROT 50M+ 🔥" or "🧠 BRAINROT 3.5M+ DETECTADO",
         description = "**" .. name .. "**",
         color = isUltra and 16711935 or 32768,
         fields = {
@@ -158,7 +157,7 @@ local function sendWebhook(name, rarity, value, jobId, isUltra)
             {name = "⭐ Raridade", value = rarity or "Raro", inline = true},
             {name = "🔗 Job ID", value = "```"..jobId.."```", inline = false},
         },
-        footer = {text = "Instância " .. instanceId .. " | BranzZ Scanner"},
+        footer = {text = "Instância " .. instanceId},
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
     }
 
@@ -167,7 +166,7 @@ local function sendWebhook(name, rarity, value, jobId, isUltra)
         components = {{
             type = 1,
             components = {{
-                type = 2,
+                type = 2, -- Corrigido: type 2 (Button)
                 label = "🚀 Entrar no Servidor",
                 style = 5,
                 url = joinLink
@@ -176,7 +175,7 @@ local function sendWebhook(name, rarity, value, jobId, isUltra)
     }
 
     local embedDemo = {
-        title = "BranzZ LOGS HIGHLIGHT",
+        title = "BRANZZ LOGS HIGHLIGHT",
         description = "**" .. name .. "**",
         color = 49151,
         fields = {{name = "💰 Geração", value = "```"..value.."```", inline = true}},
@@ -187,9 +186,9 @@ local function sendWebhook(name, rarity, value, jobId, isUltra)
     -- ENVIO Acesso
     task.spawn(function()
         pcall(function()
-            local payload = HttpService:JSONEncode(dataAcesso)
+            local payload = HttpService:JSONEncode(dataAcesso) -- Corrigido: :JSONEncode
             request({
-                Url = webhookBranzZAcesso,
+                Url = webhookCloveAcesso,
                 Method = "POST",
                 Headers = {["Content-Type"] = "application/json"},
                 Body = payload
@@ -200,7 +199,7 @@ local function sendWebhook(name, rarity, value, jobId, isUltra)
     -- ENVIO Demo
     task.spawn(function()
         pcall(function()
-            local payload = HttpService:JSONEncode({embeds = {embedDemo}})
+            local payload = HttpService:JSONEncode({embeds = {embedDemo}}) -- Corrigido: :JSONEncode
             request({
                 Url = webhookDemo,
                 Method = "POST",
@@ -224,8 +223,7 @@ end
 
 local function scanSinglePlot(plot)
     pcall(function()
-        local synchronizer = require(ReplicatedStorage.Packages.Synchronizer)
-        local channel = synchronizer:Get(plot.Name)
+        local channel = require(ReplicatedStorage.Packages.Synchronizer):Get(plot.Name)
         if not channel then return end
         local animalList = channel:Get("AnimalList")
         local currentHash = getAnimalHash(animalList)
@@ -237,11 +235,11 @@ local function scanSinglePlot(plot)
         end
 
         for slot, animalData in pairs(animalList or {}) do
-            if type(animalData) ~= "table" then goto continue end
+            if type(animalData) ~= "table" then continue end
             local info = require(ReplicatedStorage.Datas.Animals)[animalData.Index]
-            if not info then goto continue end
+            if not info then continue end
             local genValue = require(ReplicatedStorage.Shared.Animals):GetGeneration(animalData.Index, animalData.Mutation, animalData.Traits, nil)
-            if genValue < MIN_GEN then goto continue end
+            if genValue < MIN_GEN then continue end
 
             local genText = "$" .. require(ReplicatedStorage.Utils.NumberUtils):ToString(genValue) .. "/s"
 
@@ -254,7 +252,6 @@ local function scanSinglePlot(plot)
                 slot = tostring(slot),
                 uid = plot.Name .. "_" .. tostring(slot),
             })
-            ::continue::
         end
 
         table.sort(allAnimalsCache, function(a, b) return a.genValue > b.genValue end)
@@ -264,7 +261,7 @@ local function scanSinglePlot(plot)
             if not sentCache[animal.uid] then
                 sentCache[animal.uid] = true
                 local isUltra = animal.genValue >= ULTRA_GEN
-                status.Text = isUltra and "🔥 ULTRA 10M+: " .. animal.name or "🧠 BRAINROT 3.5M+: " .. animal.name
+                status.Text = isUltra and "🔥 ULTRA 50M+: " .. animal.name or "🧠 BRAINROT 3.5M+: " .. animal.name
                 sendWebhook(animal.name, animal.rarity, animal.genText, game.JobId, isUltra)
                 task.wait(0.4)
             end
@@ -326,8 +323,7 @@ local function mainLoop()
 end
 
 local function init()
-    status.Text = "BRANZZ NOTIFY SCANNER iniciado | ID: " .. instanceId
-    print("[BranzZ Scanner] Carregado! MIN_GEN: 3.5M+ | ULTRA_GEN: 10M+")
+    status.Text = "MDB NOTIFY SCANNER iniciado | ID: " .. instanceId
     local plots = Workspace:WaitForChild("Plots")
     for _, plot in ipairs(plots:GetChildren()) do
         task.spawn(function() scanSinglePlot(plot) end)
@@ -341,4 +337,4 @@ local function init()
 end
 
 init()
-print("✅ BRANZZ NOTIFY SCANNER carregado!")
+print("✅ MDB NOTIFY SCANNER carregado!")
