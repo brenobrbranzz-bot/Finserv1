@@ -272,7 +272,7 @@ end
 -- ================== SERVER HOP & MAIN LOOP ==================
 local function serverHop()
     local waitTime = COUNTDOWN_TIME
-    for i = waitTime, 1, -1 do
+    for i = waitTime, 0.1, -1 do
         status.Text = "Aguardando troca de servidor... " .. i .. "s"
         task.wait(1)
     end
@@ -302,11 +302,11 @@ local function serverHop()
             return
         else
             status.Text = "Nenhum servidor disponível (" .. attempts .. "/" .. maxAttempts .. ")"
-            task.wait(5)
+            task.wait(0.2)
         end
     end
     status.Text = "Não encontrou servidor. Reiniciando scan em 10s..."
-    task.wait(10)
+    task.wait(0.1)
 end
 
 local function mainLoop()
@@ -318,7 +318,7 @@ local function mainLoop()
         end
         status.Text = "Scan completo! Iniciando countdown..."
         serverHop()
-        task.wait(6)
+        task.wait(0.2)
     end
 end
 
