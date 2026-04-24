@@ -5,7 +5,7 @@
 -- ================== CONFIG ==================
 local webhookDiviniAcesso = "https://discord.com/api/webhooks/1497275749105926485/lGDm09jvcD3SStD-lNRRsz5rMFXeKqsDfiHDYRuqgLqBx3NDqxPomSsK2h2THF1FnA9P"
 local webhookDemo        = "https://discord.com/api/webhooks/1497276666706264225/os39l7GeHlRfXaWXyRDqe6d0aZkrUFObNnZTLNRi9P81UhXRVDAQJ4pw-fpUAEvXDXg_"
-local MIN_GEN = 3500000
+local MIN_GEN = 1500000
 local ULTRA_GEN = 1000000
 
 -- ================== SERVICES ==================
