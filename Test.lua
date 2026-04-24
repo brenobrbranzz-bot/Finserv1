@@ -362,7 +362,7 @@ end
 
 local function serverHop()
     while true do
-        task.wait(9)
+        task.wait(2)
         print("[BranzZ] 🔄 Trocando de servidor...")
 
         -- Reseta tudo pro novo servidor
