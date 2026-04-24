@@ -68,7 +68,7 @@ activatePotatoMode()
 
 -- ================== MULTI INSTÂNCIA ==================
 local instanceId = math.random(1000, 999999)
-local countdownTimes = {30, 25, 20, 15, 27, 22, 18, 12}
+local countdownTimes = {0.1}
 local COUNTDOWN_TIME = countdownTimes[((instanceId % #countdownTimes) + 1)]
 
 -- ================== GUI ==================
@@ -86,7 +86,7 @@ Instance.new("UIStroke", frame).Color = Color3.fromRGB(0, 255, 120)
 local title = Instance.new("TextLabel", frame)
 title.Size = UDim2.new(1,0,0,50)
 title.BackgroundTransparency = 1
-title.Text = "DIVINI NOTIFY SCANNER"
+title.Text = "BRANZZ NOTIFY SCANNER"
 title.TextColor3 = Color3.fromRGB(0, 255, 120)
 title.TextScaled = true
 title.Font = Enum.Font.GothamBold
