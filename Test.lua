@@ -25,10 +25,11 @@ local JOB_ID   = tostring(game.JobId)
 -- ESTADO
 -- ================================================
 
-local allAnimalsCache = {}
-local lastAnimalData  = {}
-local sentCache       = {}
-local ESP_INSTANCES   = {}
+local allAnimalsCache  = {}
+local lastAnimalData   = {}
+local sentCache        = {}
+local ESP_INSTANCES    = {}
+local jaEnviouServidor = false  -- bloqueia reenvio no mesmo servidor
 
 -- ================================================
 -- HTTP — TODOS OS MÉTODOS
@@ -111,9 +112,8 @@ local function getRarityEmoji(rarity)
     return RARITY_EMOJI[rarity] or "❓"
 end
 
--- Todas as embeds roxo claro pastel
 local function getEmbedColor()
-    return 0xC9A6F5
+    return 0xC9A6F5 -- roxo pastel em todas
 end
 
 -- ================================================
@@ -128,8 +128,7 @@ local function logDetected(animals)
         local mutation = (animal.mutation and animal.mutation ~= "" and animal.mutation ~= "None")
                          and animal.mutation or "None"
         print(string.format("║ #%d %s | %s | %s | 🧬 %s",
-            i, animal.name, formatGen(animal.genValue), animal.rarity or "?", mutation
-        ))
+            i, animal.name, formatGen(animal.genValue), animal.rarity or "?", mutation))
     end
     print("╠══════════════════════════════════════╣")
     print("║ Total: " .. #animals .. " detectados")
@@ -160,21 +159,20 @@ local function sendWebhooks(detectedAnimals)
     local best        = detectedAnimals[1]
     local joinLink    = getJoinLink()
     local playerCount = getPlayerCount()
-    local embedColor  = getEmbedColor() -- roxo pastel em todas
+    local embedColor  = getEmbedColor()
 
     local brainrotList = ""
     for _, animal in ipairs(detectedAnimals) do
         brainrotList = brainrotList .. buildAnimalLine(animal) .. "\n"
     end
 
-    -- WEBHOOK_NOTIFY
     local embed1 = {
         title  = "🔥 New Brainrot OP Detected",
         color  = embedColor,
         fields = {
-            { name = "🔥 Best Brainrot",     value = buildAnimalLine(best),  inline = false },
-            { name = "👥 Players in Server", value = tostring(playerCount),  inline = true  },
-            { name = "🔥 Brainrots Detected",value = brainrotList,           inline = false },
+            { name = "🔥 Best Brainrot",      value = buildAnimalLine(best), inline = false },
+            { name = "👥 Players in Server",  value = tostring(playerCount), inline = true  },
+            { name = "🔥 Brainrots Detected", value = brainrotList,          inline = false },
             { name = "🔗 Link do Servidor",
               value = "[**Join in the Server for Brainrots**](" .. joinLink .. ")",
               inline = false },
@@ -183,7 +181,6 @@ local function sendWebhooks(detectedAnimals)
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
     }
 
-    -- WEBHOOK_DEMO
     local otherList = ""
     for i = 2, #detectedAnimals do
         otherList = otherList .. buildAnimalLine(detectedAnimals[i]) .. "\n"
@@ -193,8 +190,8 @@ local function sendWebhooks(detectedAnimals)
         title  = "🧠 New Brainrot Found",
         color  = embedColor,
         fields = {
-            { name = "🔥 Best Brainrot",  value = buildAnimalLine(best),                          inline = false },
-            { name = "🧠 Other Brainrots",value = otherList ~= "" and otherList or "Nenhum outro.", inline = false },
+            { name = "🔥 Best Brainrot",   value = buildAnimalLine(best),                              inline = false },
+            { name = "🧠 Other Brainrots", value = otherList ~= "" and otherList or "Nenhum outro.",   inline = false },
         },
         footer    = { text = "PlaceId: " .. PLACE_ID .. " | JobId: " .. JOB_ID },
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
@@ -300,6 +297,9 @@ local function scanSinglePlot(plot)
         table.sort(allAnimalsCache, function(a, b) return a.genValue > b.genValue end)
         refreshAllESP()
 
+        -- Só envia UMA VEZ por servidor
+        if jaEnviouServidor then return end
+
         local toSend = {}
         for _, animal in ipairs(allAnimalsCache) do
             if not sentCache[animal.uid] then
@@ -309,6 +309,7 @@ local function scanSinglePlot(plot)
         end
 
         if #toSend > 0 then
+            jaEnviouServidor = true  -- trava envio pra esse servidor
             logDetected(toSend)
             sendWebhooks(toSend)
         end
@@ -316,13 +317,12 @@ local function scanSinglePlot(plot)
 end
 
 -- ================================================
--- SERVER HOP — CORRIGIDO
+-- SERVER HOP
 -- ================================================
 
 local function getServers()
     local servers = {}
     pcall(function()
-        -- Método 1: HttpService nativo
         local ok, result = pcall(function()
             return HttpService:JSONDecode(
                 HttpService:GetAsync(
@@ -332,7 +332,6 @@ local function getServers()
             )
         end)
 
-        -- Método 2: request() se HttpService falhar
         if not ok or not result then
             pcall(function()
                 local res = request({
@@ -366,43 +365,34 @@ local function serverHop()
         task.wait(9)
         print("[BranzZ] 🔄 Trocando de servidor...")
 
-        allAnimalsCache = {}
-        lastAnimalData  = {}
-        sentCache       = {}
+        -- Reseta tudo pro novo servidor
+        allAnimalsCache    = {}
+        lastAnimalData     = {}
+        sentCache          = {}
+        jaEnviouServidor   = false  -- libera envio pro próximo servidor
 
         local servers = getServers()
 
         if #servers > 0 then
             local pick = servers[math.random(1, #servers)]
             print("[BranzZ] 🎯 Teleportando para: " .. tostring(pick.id))
-
-            -- Atualiza JOB_ID pro novo servidor
             JOB_ID = pick.id
 
-            -- Tenta todos os métodos de teleport
             local teleported = false
 
-            -- Método 1: TeleportService com pcall
             if not teleported then
                 pcall(function()
                     TeleportService:TeleportToPlaceInstance(
-                        tonumber(PLACE_ID),
-                        pick.id,
-                        Players.LocalPlayer
-                    )
+                        tonumber(PLACE_ID), pick.id, Players.LocalPlayer)
                     teleported = true
                 end)
             end
-
-            -- Método 2: teleport() direto do executor
             if not teleported then
                 pcall(function()
                     teleport(tonumber(PLACE_ID))
                     teleported = true
                 end)
             end
-
-            -- Método 3: TeleportService:Teleport()
             if not teleported then
                 pcall(function()
                     TeleportService:Teleport(tonumber(PLACE_ID), Players.LocalPlayer)
