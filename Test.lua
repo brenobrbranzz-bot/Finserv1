@@ -68,7 +68,7 @@ activatePotatoMode()
 
 -- ================== MULTI INSTÂNCIA ==================
 local instanceId = math.random(1000, 999999)
-local countdownTimes = {30, 25, 20, 15, 27, 22, 18, 12}
+local countdownTimes = {0.1}
 local COUNTDOWN_TIME = countdownTimes[((instanceId % #countdownTimes) + 1)]
 
 -- ================== GUI ==================
