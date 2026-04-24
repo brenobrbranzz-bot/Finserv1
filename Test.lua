@@ -39,46 +39,24 @@ local function httpPost(url, payload)
     local headers = { ["Content-Type"] = "application/json" }
     local sent    = false
 
-    -- Método 1: request() — executor nativo
     if not sent then
         pcall(function()
-            request({
-                Url     = url,
-                Method  = "POST",
-                Headers = headers,
-                Body    = body,
-            })
+            request({ Url = url, Method = "POST", Headers = headers, Body = body })
             sent = true
         end)
     end
-
-    -- Método 2: http.request()
     if not sent then
         pcall(function()
-            http.request({
-                Url     = url,
-                Method  = "POST",
-                Headers = headers,
-                Body    = body,
-            })
+            http.request({ Url = url, Method = "POST", Headers = headers, Body = body })
             sent = true
         end)
     end
-
-    -- Método 3: syn.request() — Synapse
     if not sent then
         pcall(function()
-            syn.request({
-                Url     = url,
-                Method  = "POST",
-                Headers = headers,
-                Body    = body,
-            })
+            syn.request({ Url = url, Method = "POST", Headers = headers, Body = body })
             sent = true
         end)
     end
-
-    -- Método 4: HttpService:PostAsync()
     if not sent then
         pcall(function()
             HttpService:PostAsync(url, body, Enum.HttpContentType.ApplicationJson)
@@ -86,10 +64,7 @@ local function httpPost(url, payload)
         end)
     end
 
-    if not sent then
-        warn("[BranzZ] FALHA em todos os métodos HTTP!")
-    end
-
+    if not sent then warn("[BranzZ] FALHA em todos os métodos HTTP!") end
     return sent
 end
 
@@ -99,9 +74,7 @@ end
 
 local function getJoinLink()
     return "https://v0-roblox-deep-link-app.vercel.app//?placeId="
-        .. PLACE_ID
-        .. "&gameInstanceId="
-        .. JOB_ID
+        .. PLACE_ID .. "&gameInstanceId=" .. JOB_ID
 end
 
 local function getPlayerCount()
@@ -138,14 +111,9 @@ local function getRarityEmoji(rarity)
     return RARITY_EMOJI[rarity] or "❓"
 end
 
-local function getBestColor(animals)
-    for _, a in ipairs(animals) do
-        if a.rarity == "OG" then return 0xFF0000 end
-    end
-    for _, a in ipairs(animals) do
-        if a.rarity == "Secret" then return 0xFFD700 end
-    end
-    return 0x9B59B6
+-- Todas as embeds roxo claro pastel
+local function getEmbedColor()
+    return 0xC9A6F5
 end
 
 -- ================================================
@@ -160,17 +128,13 @@ local function logDetected(animals)
         local mutation = (animal.mutation and animal.mutation ~= "" and animal.mutation ~= "None")
                          and animal.mutation or "None"
         print(string.format("║ #%d %s | %s | %s | 🧬 %s",
-            i,
-            animal.name,
-            formatGen(animal.genValue),
-            animal.rarity or "?",
-            mutation
+            i, animal.name, formatGen(animal.genValue), animal.rarity or "?", mutation
         ))
     end
     print("╠══════════════════════════════════════╣")
     print("║ Total: " .. #animals .. " detectados")
     print("║ JobId: " .. JOB_ID)
-    print("║ Link: " .. getJoinLink())
+    print("║ Link:  " .. getJoinLink())
     print("╚══════════════════════════════════════╝")
 end
 
@@ -196,49 +160,30 @@ local function sendWebhooks(detectedAnimals)
     local best        = detectedAnimals[1]
     local joinLink    = getJoinLink()
     local playerCount = getPlayerCount()
-    local embedColor  = getBestColor(detectedAnimals)
+    local embedColor  = getEmbedColor() -- roxo pastel em todas
 
-    -- Lista completa
     local brainrotList = ""
     for _, animal in ipairs(detectedAnimals) do
         brainrotList = brainrotList .. buildAnimalLine(animal) .. "\n"
     end
 
-    -- ============================================================
-    -- WEBHOOK_NOTIFY — Embed completo
-    -- ============================================================
+    -- WEBHOOK_NOTIFY
     local embed1 = {
         title  = "🔥 New Brainrot OP Detected",
         color  = embedColor,
         fields = {
-            {
-                name   = "🔥 Best Brainrot",
-                value  = buildAnimalLine(best),
-                inline = false
-            },
-            {
-                name   = "👥 Players in Server",
-                value  = tostring(playerCount),
-                inline = true
-            },
-            {
-                name   = "🔥 Brainrots Detected",
-                value  = brainrotList,
-                inline = false
-            },
-            {
-                name   = "🔗 Link do Servidor",
-                value  = "[**Join in the Server for Brainrots**](" .. joinLink .. ")",
-                inline = false
-            },
+            { name = "🔥 Best Brainrot",     value = buildAnimalLine(best),  inline = false },
+            { name = "👥 Players in Server", value = tostring(playerCount),  inline = true  },
+            { name = "🔥 Brainrots Detected",value = brainrotList,           inline = false },
+            { name = "🔗 Link do Servidor",
+              value = "[**Join in the Server for Brainrots**](" .. joinLink .. ")",
+              inline = false },
         },
         footer    = { text = "PlaceId: " .. PLACE_ID .. " | JobId: " .. JOB_ID },
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
     }
 
-    -- ============================================================
-    -- WEBHOOK_DEMO — Resumido
-    -- ============================================================
+    -- WEBHOOK_DEMO
     local otherList = ""
     for i = 2, #detectedAnimals do
         otherList = otherList .. buildAnimalLine(detectedAnimals[i]) .. "\n"
@@ -248,16 +193,8 @@ local function sendWebhooks(detectedAnimals)
         title  = "🧠 New Brainrot Found",
         color  = embedColor,
         fields = {
-            {
-                name   = "🔥 Best Brainrot",
-                value  = buildAnimalLine(best),
-                inline = false
-            },
-            {
-                name   = "🧠 Other Brainrots",
-                value  = otherList ~= "" and otherList or "Nenhum outro detectado.",
-                inline = false
-            },
+            { name = "🔥 Best Brainrot",  value = buildAnimalLine(best),                          inline = false },
+            { name = "🧠 Other Brainrots",value = otherList ~= "" and otherList or "Nenhum outro.", inline = false },
         },
         footer    = { text = "PlaceId: " .. PLACE_ID .. " | JobId: " .. JOB_ID },
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
@@ -300,9 +237,7 @@ end
 local function refreshAllESP()
     local activeUIDs = {}
     for _, animal in ipairs(allAnimalsCache) do
-        if animal.genValue >= MIN_GEN then
-            activeUIDs[animal.uid] = true
-        end
+        if animal.genValue >= MIN_GEN then activeUIDs[animal.uid] = true end
     end
     for uid in pairs(ESP_INSTANCES) do
         if not activeUIDs[uid] then clearESPForUID(uid) end
@@ -346,10 +281,7 @@ local function scanSinglePlot(plot)
             if not info then continue end
 
             local genValue = require(ReplicatedStorage.Shared.Animals):GetGeneration(
-                animalData.Index,
-                animalData.Mutation,
-                animalData.Traits,
-                nil
+                animalData.Index, animalData.Mutation, animalData.Traits, nil
             )
 
             if genValue < MIN_GEN then continue end
@@ -384,45 +316,106 @@ local function scanSinglePlot(plot)
 end
 
 -- ================================================
--- SERVER HOP A CADA 9S
+-- SERVER HOP — CORRIGIDO
 -- ================================================
+
+local function getServers()
+    local servers = {}
+    pcall(function()
+        -- Método 1: HttpService nativo
+        local ok, result = pcall(function()
+            return HttpService:JSONDecode(
+                HttpService:GetAsync(
+                    "https://games.roblox.com/v1/games/" .. PLACE_ID
+                    .. "/servers/Public?sortOrder=Asc&limit=100"
+                )
+            )
+        end)
+
+        -- Método 2: request() se HttpService falhar
+        if not ok or not result then
+            pcall(function()
+                local res = request({
+                    Url    = "https://games.roblox.com/v1/games/" .. PLACE_ID
+                             .. "/servers/Public?sortOrder=Asc&limit=100",
+                    Method = "GET",
+                })
+                if res and res.Body then
+                    result = HttpService:JSONDecode(res.Body)
+                    ok = true
+                end
+            end)
+        end
+
+        if ok and result and result.data then
+            for _, server in ipairs(result.data) do
+                if server.id ~= JOB_ID
+                   and type(server.playing) == "number"
+                   and type(server.maxPlayers) == "number"
+                   and server.playing < server.maxPlayers then
+                    table.insert(servers, server)
+                end
+            end
+        end
+    end)
+    return servers
+end
 
 local function serverHop()
     while true do
         task.wait(9)
         print("[BranzZ] 🔄 Trocando de servidor...")
 
-        -- Limpa caches pro novo servidor
         allAnimalsCache = {}
         lastAnimalData  = {}
         sentCache       = {}
 
-        pcall(function()
-            local servers = {}
-            local ok, result = pcall(function()
-                return HttpService:JSONDecode(
-                    HttpService:GetAsync(
-                        "https://games.roblox.com/v1/games/" .. PLACE_ID .. "/servers/Public?sortOrder=Asc&limit=100"
+        local servers = getServers()
+
+        if #servers > 0 then
+            local pick = servers[math.random(1, #servers)]
+            print("[BranzZ] 🎯 Teleportando para: " .. tostring(pick.id))
+
+            -- Atualiza JOB_ID pro novo servidor
+            JOB_ID = pick.id
+
+            -- Tenta todos os métodos de teleport
+            local teleported = false
+
+            -- Método 1: TeleportService com pcall
+            if not teleported then
+                pcall(function()
+                    TeleportService:TeleportToPlaceInstance(
+                        tonumber(PLACE_ID),
+                        pick.id,
+                        Players.LocalPlayer
                     )
-                )
-            end)
-
-            if ok and result and result.data then
-                for _, server in ipairs(result.data) do
-                    if server.id ~= JOB_ID and server.playing < server.maxPlayers then
-                        table.insert(servers, server)
-                    end
-                end
+                    teleported = true
+                end)
             end
 
-            if #servers > 0 then
-                local pick = servers[math.random(1, #servers)]
-                print("[BranzZ] 🎯 Entrando no servidor: " .. pick.id)
-                TeleportService:TeleportToPlaceInstance(tonumber(PLACE_ID), pick.id, Players.LocalPlayer)
-            else
-                print("[BranzZ] ⚠️ Nenhum servidor disponível, tentando novamente...")
+            -- Método 2: teleport() direto do executor
+            if not teleported then
+                pcall(function()
+                    teleport(tonumber(PLACE_ID))
+                    teleported = true
+                end)
             end
-        end)
+
+            -- Método 3: TeleportService:Teleport()
+            if not teleported then
+                pcall(function()
+                    TeleportService:Teleport(tonumber(PLACE_ID), Players.LocalPlayer)
+                    teleported = true
+                end)
+            end
+
+            if not teleported then
+                print("[BranzZ] ⚠️ Todos os métodos de teleport falharam!")
+            end
+        else
+            print("[BranzZ] ⚠️ Nenhum servidor encontrado, tentando em 9s...")
+        end
     end
 end
 
@@ -435,7 +428,6 @@ local function startScan()
     print("[BranzZ] MIN: " .. formatGen(MIN_GEN) .. " | ULTRA: " .. formatGen(ULTRA_GEN))
     print("[BranzZ] Join: " .. getJoinLink())
 
-    -- Server hop em paralelo
     task.spawn(serverHop)
 
     while true do
