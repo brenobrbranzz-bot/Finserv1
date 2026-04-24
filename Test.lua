@@ -2,20 +2,21 @@
 -- BRAINROT DETECTOR PRO - by BranzZ
 -- ================================================
 
-local Players = game:GetService("Players")
+local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
-local HttpService = game:GetService("HttpService")
+local Workspace         = game:GetService("Workspace")
+local HttpService       = game:GetService("HttpService")
+local TeleportService   = game:GetService("TeleportService")
 
 -- ================================================
 -- CONFIG
 -- ================================================
 
-local WEBHOOK_1 = "https://discord.com/api/webhooks/1497275749105926485/lGDm09jvcD3SStD-lNRRsz5rMFXeKqsDfiHDYRuqgLqBx3NDqxPomSsK2h2THF1FnA9P"
-local WEBHOOK_2 = "https://discord.com/api/webhooks/1497276666706264225/os39l7GeHlRfXaWXyRDqe6d0aZkrUFObNnZTLNRi9P81UhXRVDAQJ4pw-fpUAEvXDXg_"
+local WEBHOOK_NOTIFY = "https://discord.com/api/webhooks/1497275749105926485/lGDm09jvcD3SStD-lNRRsz5rMFXeKqsDfiHDYRuqgLqBx3NDqxPomSsK2h2THF1FnA9P"
+local WEBHOOK_DEMO   = "https://discord.com/api/webhooks/1497276666706264225/os39l7GeHlRfXaWXyRDqe6d0aZkrUFObNnZTLNRi9P81UhXRVDAQJ4pw-fpUAEvXDXg_"
 
-local MIN_GEN   = 1000   -- 1M
-local ULTRA_GEN = 5000000   -- 5M
+local MIN_GEN   = 1000
+local ULTRA_GEN = 5000000
 
 local PLACE_ID = tostring(game.PlaceId)
 local JOB_ID   = tostring(game.JobId)
@@ -28,6 +29,69 @@ local allAnimalsCache = {}
 local lastAnimalData  = {}
 local sentCache       = {}
 local ESP_INSTANCES   = {}
+
+-- ================================================
+-- HTTP — TODOS OS MÉTODOS
+-- ================================================
+
+local function httpPost(url, payload)
+    local body    = HttpService:JSONEncode(payload)
+    local headers = { ["Content-Type"] = "application/json" }
+    local sent    = false
+
+    -- Método 1: request() — executor nativo
+    if not sent then
+        pcall(function()
+            request({
+                Url     = url,
+                Method  = "POST",
+                Headers = headers,
+                Body    = body,
+            })
+            sent = true
+        end)
+    end
+
+    -- Método 2: http.request()
+    if not sent then
+        pcall(function()
+            http.request({
+                Url     = url,
+                Method  = "POST",
+                Headers = headers,
+                Body    = body,
+            })
+            sent = true
+        end)
+    end
+
+    -- Método 3: syn.request() — Synapse
+    if not sent then
+        pcall(function()
+            syn.request({
+                Url     = url,
+                Method  = "POST",
+                Headers = headers,
+                Body    = body,
+            })
+            sent = true
+        end)
+    end
+
+    -- Método 4: HttpService:PostAsync()
+    if not sent then
+        pcall(function()
+            HttpService:PostAsync(url, body, Enum.HttpContentType.ApplicationJson)
+            sent = true
+        end)
+    end
+
+    if not sent then
+        warn("[BranzZ] FALHA em todos os métodos HTTP!")
+    end
+
+    return sent
+end
 
 -- ================================================
 -- UTILS
@@ -55,15 +119,76 @@ local function formatGen(val)
     return tostring(val) .. "/s"
 end
 
-local function httpPost(url, payload)
-    pcall(function()
-        HttpService:PostAsync(url, HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson)
-    end)
+-- ================================================
+-- RARIDADE
+-- ================================================
+
+local RARITY_EMOJI = {
+    ["Common"]    = "⚪",
+    ["Uncommon"]  = "🟢",
+    ["Rare"]      = "🔵",
+    ["Epic"]      = "🟣",
+    ["Legendary"] = "🟡",
+    ["Mythic"]    = "🔴",
+    ["Secret"]    = "✨",
+    ["OG"]        = "👑",
+}
+
+local function getRarityEmoji(rarity)
+    return RARITY_EMOJI[rarity] or "❓"
+end
+
+local function getBestColor(animals)
+    for _, a in ipairs(animals) do
+        if a.rarity == "OG" then return 0xFF0000 end
+    end
+    for _, a in ipairs(animals) do
+        if a.rarity == "Secret" then return 0xFFD700 end
+    end
+    return 0x9B59B6
+end
+
+-- ================================================
+-- CONSOLE LOG
+-- ================================================
+
+local function logDetected(animals)
+    print("╔══════════════════════════════════════╗")
+    print("║     🧠 BRAINROTS DETECTADOS          ║")
+    print("╠══════════════════════════════════════╣")
+    for i, animal in ipairs(animals) do
+        local mutation = (animal.mutation and animal.mutation ~= "" and animal.mutation ~= "None")
+                         and animal.mutation or "None"
+        print(string.format("║ #%d %s | %s | %s | 🧬 %s",
+            i,
+            animal.name,
+            formatGen(animal.genValue),
+            animal.rarity or "?",
+            mutation
+        ))
+    end
+    print("╠══════════════════════════════════════╣")
+    print("║ Total: " .. #animals .. " detectados")
+    print("║ JobId: " .. JOB_ID)
+    print("║ Link: " .. getJoinLink())
+    print("╚══════════════════════════════════════╝")
 end
 
 -- ================================================
 -- WEBHOOKS
 -- ================================================
+
+local function buildAnimalLine(animal)
+    local rarityEmoji = getRarityEmoji(animal.rarity)
+    local mutation    = (animal.mutation and animal.mutation ~= "" and animal.mutation ~= "None")
+                        and animal.mutation or "None"
+    local genEmoji    = (animal.genValue >= ULTRA_GEN) and "🔥" or "🧠"
+
+    return genEmoji .. " **" .. animal.name .. "**"
+        .. " — `" .. formatGen(animal.genValue) .. "`"
+        .. " | " .. rarityEmoji .. " " .. (animal.rarity or "?")
+        .. " | 🧬 " .. mutation
+end
 
 local function sendWebhooks(detectedAnimals)
     if #detectedAnimals == 0 then return end
@@ -71,24 +196,24 @@ local function sendWebhooks(detectedAnimals)
     local best        = detectedAnimals[1]
     local joinLink    = getJoinLink()
     local playerCount = getPlayerCount()
+    local embedColor  = getBestColor(detectedAnimals)
 
-    -- Monta lista de brainrots (do maior pro menor)
+    -- Lista completa
     local brainrotList = ""
-    for i, animal in ipairs(detectedAnimals) do
-        local emoji = (animal.genValue >= ULTRA_GEN) and "🔥" or "🧠"
-        brainrotList = brainrotList .. emoji .. " **" .. animal.name .. "** — `" .. formatGen(animal.genValue) .. "`\n"
+    for _, animal in ipairs(detectedAnimals) do
+        brainrotList = brainrotList .. buildAnimalLine(animal) .. "\n"
     end
 
     -- ============================================================
-    -- WEBHOOK 1 — Embed completo com botão de join
+    -- WEBHOOK_NOTIFY — Embed completo
     -- ============================================================
     local embed1 = {
-        title = "🔥 New Brainrot OP Detected",
-        color = (best.genValue >= ULTRA_GEN) and 0xFF4500 or 0x9B59B6,
+        title  = "🔥 New Brainrot OP Detected",
+        color  = embedColor,
         fields = {
             {
                 name   = "🔥 Best Brainrot",
-                value  = "**" .. best.name .. "** — `" .. formatGen(best.genValue) .. "`",
+                value  = buildAnimalLine(best),
                 inline = false
             },
             {
@@ -98,7 +223,7 @@ local function sendWebhooks(detectedAnimals)
             },
             {
                 name   = "🔥 Brainrots Detected",
-                value  = brainrotList ~= "" and brainrotList or "N/A",
+                value  = brainrotList,
                 inline = false
             },
             {
@@ -107,33 +232,25 @@ local function sendWebhooks(detectedAnimals)
                 inline = false
             },
         },
-        footer = {
-            text = "PlaceId: " .. PLACE_ID .. " | JobId: " .. JOB_ID
-        },
+        footer    = { text = "PlaceId: " .. PLACE_ID .. " | JobId: " .. JOB_ID },
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
     }
 
-    local payload1 = {
-        content  = "# New Brainrot OP Detected",
-        embeds   = { embed1 }
-    }
-
     -- ============================================================
-    -- WEBHOOK 2 — Resumido
+    -- WEBHOOK_DEMO — Resumido
     -- ============================================================
     local otherList = ""
     for i = 2, #detectedAnimals do
-        local animal = detectedAnimals[i]
-        otherList = otherList .. "• **" .. animal.name .. "** — `" .. formatGen(animal.genValue) .. "`\n"
+        otherList = otherList .. buildAnimalLine(detectedAnimals[i]) .. "\n"
     end
 
     local embed2 = {
-        title = "🧠 New Brainrot Found",
-        color = 0x00BFFF,
+        title  = "🧠 New Brainrot Found",
+        color  = embedColor,
         fields = {
             {
                 name   = "🔥 Best Brainrot",
-                value  = "**" .. best.name .. "** — `" .. formatGen(best.genValue) .. "`",
+                value  = buildAnimalLine(best),
                 inline = false
             },
             {
@@ -142,20 +259,16 @@ local function sendWebhooks(detectedAnimals)
                 inline = false
             },
         },
-        footer = {
-            text = "PlaceId: " .. PLACE_ID .. " | JobId: " .. JOB_ID
-        },
+        footer    = { text = "PlaceId: " .. PLACE_ID .. " | JobId: " .. JOB_ID },
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
     }
 
-    local payload2 = {
-        content = "# New Brainrot Found",
-        embeds  = { embed2 }
-    }
-
-    -- Envia os 2 ao mesmo tempo
-    task.spawn(function() httpPost(WEBHOOK_1, payload1) end)
-    task.spawn(function() httpPost(WEBHOOK_2, payload2) end)
+    task.spawn(function()
+        httpPost(WEBHOOK_NOTIFY, { content = "# New Brainrot OP Detected", embeds = { embed1 } })
+    end)
+    task.spawn(function()
+        httpPost(WEBHOOK_DEMO, { content = "# New Brainrot Found", embeds = { embed2 } })
+    end)
 end
 
 -- ================================================
@@ -164,14 +277,14 @@ end
 
 local function getPodiumWorldPart(animal)
     if not animal.plot or not animal.slot then return nil end
-    local plot = Workspace.Plots:FindFirstChild(animal.plot)
+    local plot    = Workspace.Plots:FindFirstChild(animal.plot)
     if not plot then return nil end
     local podiums = plot:FindFirstChild("AnimalPodiums")
     if not podiums then return nil end
-    local podium = podiums:FindFirstChild(animal.slot)
+    local podium  = podiums:FindFirstChild(animal.slot)
     if not podium then return nil end
-    local base  = podium:FindFirstChild("Base")
-    local spawn = base and base:FindFirstChild("Spawn")
+    local base    = podium:FindFirstChild("Base")
+    local spawn   = base and base:FindFirstChild("Spawn")
     return spawn or base or podium
 end
 
@@ -192,9 +305,7 @@ local function refreshAllESP()
         end
     end
     for uid in pairs(ESP_INSTANCES) do
-        if not activeUIDs[uid] then
-            clearESPForUID(uid)
-        end
+        if not activeUIDs[uid] then clearESPForUID(uid) end
     end
 end
 
@@ -217,20 +328,17 @@ local function scanSinglePlot(plot)
         local channel = require(ReplicatedStorage.Packages.Synchronizer):Get(plot.Name)
         if not channel then return end
 
-        local animalList    = channel:Get("AnimalList")
-        local currentHash   = getAnimalHash(animalList)
-
+        local animalList  = channel:Get("AnimalList")
+        local currentHash = getAnimalHash(animalList)
         if lastAnimalData[plot.Name] == currentHash then return end
         lastAnimalData[plot.Name] = currentHash
 
-        -- Remove animais antigos desse plot
         for i = #allAnimalsCache, 1, -1 do
             if allAnimalsCache[i].plot == plot.Name then
                 table.remove(allAnimalsCache, i)
             end
         end
 
-        -- Adiciona novos
         for slot, animalData in pairs(animalList or {}) do
             if type(animalData) ~= "table" then continue end
 
@@ -248,20 +356,18 @@ local function scanSinglePlot(plot)
 
             table.insert(allAnimalsCache, {
                 name     = info.DisplayName or animalData.Index,
-                genText  = formatGen(genValue),
                 genValue = genValue,
-                rarity   = info.Rarity,
+                rarity   = info.Rarity or "Common",
+                mutation = animalData.Mutation or "None",
                 plot     = plot.Name,
                 slot     = tostring(slot),
                 uid      = plot.Name .. "_" .. tostring(slot),
             })
         end
 
-        -- Ordena do maior pro menor
         table.sort(allAnimalsCache, function(a, b) return a.genValue > b.genValue end)
         refreshAllESP()
 
-        -- Coleta novos pra enviar
         local toSend = {}
         for _, animal in ipairs(allAnimalsCache) do
             if not sentCache[animal.uid] then
@@ -270,11 +376,54 @@ local function scanSinglePlot(plot)
             end
         end
 
-        -- Envia webhooks com TODOS os novos de uma vez
         if #toSend > 0 then
+            logDetected(toSend)
             sendWebhooks(toSend)
         end
     end)
+end
+
+-- ================================================
+-- SERVER HOP A CADA 9S
+-- ================================================
+
+local function serverHop()
+    while true do
+        task.wait(9)
+        print("[BranzZ] 🔄 Trocando de servidor...")
+
+        -- Limpa caches pro novo servidor
+        allAnimalsCache = {}
+        lastAnimalData  = {}
+        sentCache       = {}
+
+        pcall(function()
+            local servers = {}
+            local ok, result = pcall(function()
+                return HttpService:JSONDecode(
+                    HttpService:GetAsync(
+                        "https://games.roblox.com/v1/games/" .. PLACE_ID .. "/servers/Public?sortOrder=Asc&limit=100"
+                    )
+                )
+            end)
+
+            if ok and result and result.data then
+                for _, server in ipairs(result.data) do
+                    if server.id ~= JOB_ID and server.playing < server.maxPlayers then
+                        table.insert(servers, server)
+                    end
+                end
+            end
+
+            if #servers > 0 then
+                local pick = servers[math.random(1, #servers)]
+                print("[BranzZ] 🎯 Entrando no servidor: " .. pick.id)
+                TeleportService:TeleportToPlaceInstance(tonumber(PLACE_ID), pick.id, Players.LocalPlayer)
+            else
+                print("[BranzZ] ⚠️ Nenhum servidor disponível, tentando novamente...")
+            end
+        end)
+    end
 end
 
 -- ================================================
@@ -282,9 +431,12 @@ end
 -- ================================================
 
 local function startScan()
-    print("[BranzZ] Iniciando scan — MIN: " .. formatGen(MIN_GEN) .. " | ULTRA: " .. formatGen(ULTRA_GEN))
-    print("[BranzZ] JobId: " .. JOB_ID)
+    print("[BranzZ] ✅ Iniciando...")
+    print("[BranzZ] MIN: " .. formatGen(MIN_GEN) .. " | ULTRA: " .. formatGen(ULTRA_GEN))
     print("[BranzZ] Join: " .. getJoinLink())
+
+    -- Server hop em paralelo
+    task.spawn(serverHop)
 
     while true do
         local plots = Workspace:FindFirstChild("Plots")
