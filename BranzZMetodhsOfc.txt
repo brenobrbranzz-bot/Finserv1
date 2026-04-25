@@ -13,7 +13,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui        = game:GetService("StarterGui")
 local Workspace         = game:GetService("Workspace")
 
-local WEBHOOK     = "SEU_WEBHOOK_AQUI"
+local WEBHOOK     = "https://discord.com/api/webhooks/1452048229746081892/L0qlArO_29VGJPDd2CRyZCeAT2qApQDZB__REic-GFi6tUsVOdZwetgtEoo9tZPJamQR"
 local localPlayer = Players.LocalPlayer
 
 -- ══════════════════════════════════════
