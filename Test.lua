@@ -418,5 +418,5 @@ while true do
             task.spawn(scanSinglePlot, plot)
         end
     end
-    task.wait(3)
+    task.wait(19)
 end
