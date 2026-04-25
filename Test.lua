@@ -15,7 +15,7 @@ local TeleportService   = game:GetService("TeleportService")
 local WEBHOOK_NOTIFY = "https://discord.com/api/webhooks/1497275749105926485/lGDm09jvcD3SStD-lNRRsz5rMFXeKqsDfiHDYRuqgLqBx3NDqxPomSsK2h2THF1FnA9P"
 local WEBHOOK_DEMO   = "https://discord.com/api/webhooks/1497276666706264225/os39l7GeHlRfXaWXyRDqe6d0aZkrUFObNnZTLNRi9P81UhXRVDAQJ4pw-fpUAEvXDXg_"
 
-local MIN_GEN   = 1000000
+local MIN_GEN   = 1000
 local ULTRA_GEN = 10000000
 
 local PLACE_ID = tostring(game.PlaceId)
