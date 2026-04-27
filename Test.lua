@@ -110,7 +110,7 @@ local RARITY_EMOJI = {
     ["Epic"]      = "🟣",
     ["Legendary"] = "🟠",
     ["Mythic"]    = "🔴",
-    ["Good"]      = "👼",
+    ["Brainrot Good"]      = "👼",
     ["Secret"]    = "⚫",
     ["OG"]        = "🟡",
 }
